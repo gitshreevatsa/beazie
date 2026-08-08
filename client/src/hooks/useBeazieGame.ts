@@ -7,19 +7,16 @@ import { runPull, type BeazieStage, type PullResult } from "@/utils/beazie";
 function friendlyError(e: unknown): string {
   const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
   if (msg.includes("user rejected") || msg.includes("user denied"))
-    return "You backed out — try the drop again.";
-  if (msg.includes("insufficient funds"))
-    return "Not enough ETH for a credit.";
-  if (msg.includes("insufficientvalue"))
-    return "Need a bit more ETH for this drop.";
+    return "Cancelled — you can try again anytime.";
+  if (msg.includes("insufficient funds") || msg.includes("insufficientvalue"))
+    return "Not enough ETH for this round.";
   if (msg.includes("attestedreveal") || msg.includes("covalidator"))
-    return "Prize is still sealed — try claiming again.";
+    return "Still preparing your prize — please try again.";
   if (msg.includes("alreadysettled"))
-    return "You already claimed this prize.";
-  return "The machine hiccuped. Try again.";
+    return "This round was already uncovered.";
+  return "Something went wrong. Please try again.";
 }
 
-/** Manages drop → grab → claim lifecycle. */
 export function useBeazieGame() {
   const { ctx, ready, isConnected } = useGameContext();
   const [stage, setStage] = useState<BeazieStage | null>(null);

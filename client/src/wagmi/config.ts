@@ -14,7 +14,7 @@ const RPC_URLS = [
 ].filter((u): u is string => Boolean(u));
 
 export const wagmiConfig = getDefaultConfig({
-  appName: "Beazie",
+  appName: "Veil",
   projectId,
   chains: [baseSepolia],
   transports: {

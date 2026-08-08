@@ -8,7 +8,7 @@ export function PlayButton({
   onPlay,
   isPlaying,
   disabled = false,
-  label = "DROP",
+  label = "Play",
 }: {
   onPlay: () => void;
   isPlaying: boolean;
@@ -24,7 +24,7 @@ export function PlayButton({
         onClick={openConnectModal}
         className="w-full border-4 border-ink bg-butter px-4 py-3.5 font-display text-lg font-bold text-ink shadow-base transition-transform hover:-translate-y-0.5"
       >
-        Connect to play
+        Connect wallet
       </button>
     );
   }
@@ -37,7 +37,7 @@ export function PlayButton({
     >
       {isPlaying ? (
         <>
-          <Loader2 className="h-5 w-5 animate-spin" /> In play…
+          <Loader2 className="h-5 w-5 animate-spin" /> Playing…
         </>
       ) : (
         label

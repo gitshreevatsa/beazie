@@ -13,13 +13,13 @@ function Navbar() {
             className="font-display text-3xl font-extrabold tracking-tight text-ink m500:text-xl"
             href="/"
           >
-            Beazie
+            Veil
           </Link>
           <Link
-            href="/games/claw"
+            href="/play"
             className="hidden font-body text-sm font-semibold text-ink/70 transition-colors hover:text-ink sm:inline"
           >
-            The Claw
+            Play
           </Link>
         </div>
 

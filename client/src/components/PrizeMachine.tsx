@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import type { BeazieStage } from "@/utils/beazie";
 
-/**
- * Claw cabinet animation. Never takes a tier — no outcome hints mid-grab.
- */
-export function ClawAnimation({
+/** Prize machine animation — no outcome hints mid-round. */
+export function PrizeMachine({
   stage,
   active,
 }: {
@@ -34,34 +32,33 @@ export function ClawAnimation({
     }
   }, [stage, active]);
 
-  const clawY =
+  const armY =
     phase === "drop" ? 72 : phase === "grab" ? 78 : phase === "lift" ? 28 : 18;
 
-  const lightLabel =
+  const status =
     phase === "idle"
-      ? "INSERT COIN"
+      ? "Ready"
       : phase === "drop"
-        ? "DROPPING"
+        ? "Playing"
         : phase === "grab"
-          ? "GRABBING"
-          : "LIFTING";
+          ? "Choosing"
+          : "Almost there";
 
   return (
     <div className="relative mx-auto w-full" aria-hidden>
-      {/* Marquee light above the glass — not over the prizes */}
       <div className="mb-0 flex items-center justify-between border-4 border-b-0 border-ink bg-ink px-3 py-2">
         <span className="font-display text-[10px] font-bold tracking-[0.25em] text-butter/50">
-          BEAZIE
+          VEIL
         </span>
         <span
-          className={`font-display text-xs font-extrabold tracking-[0.2em] ${
+          className={`font-display text-xs font-extrabold tracking-[0.18em] ${
             phase === "idle" ? "text-butter animate-pulse" : "text-main"
           }`}
         >
-          {lightLabel}
+          {status}
         </span>
         <span className="font-display text-[10px] font-bold tracking-[0.25em] text-butter/50">
-          ARCADE
+          PRIVATE
         </span>
       </div>
 
@@ -83,7 +80,7 @@ export function ClawAnimation({
 
         <div
           className="absolute left-1/2 top-0 -translate-x-1/2 transition-[height] duration-700 ease-in-out"
-          style={{ height: `${clawY}%` }}
+          style={{ height: `${armY}%` }}
         >
           <div className="mx-auto h-full w-1 bg-butter" />
           <div
@@ -99,3 +96,6 @@ export function ClawAnimation({
     </div>
   );
 }
+
+/** @deprecated Use PrizeMachine */
+export const ClawAnimation = PrizeMachine;

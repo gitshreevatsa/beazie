@@ -22,8 +22,8 @@ const body = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Beazie Arcade",
-  description: "One drop. One secret prize. Claim it when you're ready.",
+  title: "Veil",
+  description: "Private prizes. Uncover them when you're ready.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
