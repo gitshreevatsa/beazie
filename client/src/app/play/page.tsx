@@ -6,6 +6,7 @@ import {
   PrizeRevealCard,
   StashStrip,
 } from "@/components/PrizeRevealCard";
+import { MusicToggle } from "@/components/MusicToggle";
 import { useBeazieGame } from "@/hooks/useBeazieGame";
 import { PULL_FEE_ETH, TIER_NAMES } from "@/utils/contract";
 import type { BeazieStage } from "@/utils/beazie";
@@ -15,6 +16,7 @@ import {
   saveToCollection,
   type UnlockedPrize,
 } from "@/utils/prizes";
+import { playSelectBlip } from "@/utils/veilAudio";
 import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
 import { useWinFx } from "@/hooks/useWinFx";
 import { useEffect, useState } from "react";
@@ -49,9 +51,9 @@ function RoundStatus({
 
   const messages: Record<Exclude<BeazieStage, "done">, string> = {
     betting: "Confirm in your wallet…",
-    animating: "Locking your box…",
-    revealing: "Unsealing the prize…",
-    settling: "Opening your box…",
+    animating: "Opening your box…",
+    revealing: "Almost there…",
+    settling: "Pulling out your prize…",
   };
 
   return (
@@ -107,6 +109,9 @@ export default function PlayPage() {
     <div className="min-h-[100svh] bg-bg text-ink">
       <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 pb-16 pt-28 m500:pt-24">
         <header className="text-center">
+          <div className="mb-3 flex justify-center">
+            <MusicToggle />
+          </div>
           <p className="font-display text-[11px] font-bold uppercase tracking-[0.35em] text-ink/45">
             How to play
           </p>
@@ -115,16 +120,16 @@ export default function PlayPage() {
           </h1>
           <ol className="mx-auto mt-4 max-w-sm space-y-1.5 text-left font-body text-sm font-medium text-ink/70">
             <li>
-              <span className="font-display font-bold text-ink">1.</span> Tap one
-              of the five boxes
+              <span className="font-display font-bold text-ink">1.</span> Tap a
+              box
             </li>
             <li>
-              <span className="font-display font-bold text-ink">2.</span> Press{" "}
-              <span className="text-ink">Open</span> (connect wallet if asked)
+              <span className="font-display font-bold text-ink">2.</span> Press
+              Open (wallet may ask to confirm)
             </li>
             <li>
-              <span className="font-display font-bold text-ink">3.</span> Unlock a
-              named prize — rarity from Common to Legendary
+              <span className="font-display font-bold text-ink">3.</span> Wait —
+              then your prize pops out
             </li>
           </ol>
           <p className="mt-3 font-body text-[11px] text-ink/40">
@@ -136,7 +141,10 @@ export default function PlayPage() {
           stage={stage}
           active={isPlaying || Boolean(result)}
           selectedBox={selectedBox}
-          onSelectBox={setSelectedBox}
+          onSelectBox={(id) => {
+            playSelectBlip();
+            setSelectedBox(id);
+          }}
           tier={result?.tier ?? null}
           tierName={
             unlocked?.prize.name ??

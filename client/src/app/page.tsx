@@ -76,11 +76,11 @@ export default function Home() {
             The loop
           </p>
           <h2 className="mt-4 font-display text-4xl font-bold tracking-tight m500:text-3xl">
-            Shuffle. Seal. Open.
+            Pick. Open. Win.
           </h2>
           <p className="mt-5 max-w-2xl font-body text-lg leading-relaxed text-butter/80 m500:text-base">
-            Boxes dance until one is chosen. Your prize stays sealed until you
-            uncover it — so the fun stays fair.
+            Choose a box, open it, and pull a prize. The outcome stays private
+            until it lands in your hands.
           </p>
         </div>
       </section>
