@@ -240,9 +240,9 @@ export function PrizeMachine({
                     transition={{ type: "spring", stiffness: 260, damping: 14 }}
                   >
                     <span className="font-display text-[10px] font-bold uppercase tracking-[0.2em] text-ink/55">
-                      You got
+                      Unlocked
                     </span>
-                    <span className="mt-1 font-display text-2xl font-extrabold leading-tight text-ink">
+                    <span className="mt-1 font-display text-xl font-extrabold leading-tight text-ink">
                       {revealLabel}
                     </span>
                   </motion.div>

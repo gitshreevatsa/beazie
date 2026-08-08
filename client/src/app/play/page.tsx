@@ -2,13 +2,22 @@
 
 import { PlayButton } from "@/components/PlayButton";
 import { PrizeMachine, BOXES } from "@/components/PrizeMachine";
+import {
+  PrizeRevealCard,
+  StashStrip,
+} from "@/components/PrizeRevealCard";
 import { useBeazieGame } from "@/hooks/useBeazieGame";
 import { PULL_FEE_ETH, TIER_NAMES } from "@/utils/contract";
 import type { BeazieStage } from "@/utils/beazie";
-import { AlertTriangle, Loader2, RotateCcw, ExternalLink } from "lucide-react";
+import {
+  buildUnlockedPrize,
+  loadCollection,
+  saveToCollection,
+  type UnlockedPrize,
+} from "@/utils/prizes";
+import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
 import { useWinFx } from "@/hooks/useWinFx";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 
 function RoundStatus({
   stage,
@@ -38,7 +47,7 @@ function RoundStatus({
 
   if (!stage || stage === "done") return null;
 
-  const messages: Record<Exclude<BeazieStage, "done" | null>, string> = {
+  const messages: Record<Exclude<BeazieStage, "done">, string> = {
     betting: "Confirm in your wallet…",
     animating: "Locking your box…",
     revealing: "Unsealing the prize…",
@@ -59,20 +68,38 @@ export default function PlayPage() {
   const { stage, error, result, isPlaying, play, reset } = useBeazieGame();
   const celebrate = useWinFx();
   const [selectedBox, setSelectedBox] = useState<number | null>(null);
+  const [unlocked, setUnlocked] = useState<UnlockedPrize | null>(null);
+  const [stash, setStash] = useState<UnlockedPrize[]>([]);
 
   useEffect(() => {
-    if (result) celebrate();
-  }, [result, celebrate]);
+    setStash(loadCollection());
+  }, []);
 
-  const basescanPlay = result
-    ? `https://sepolia.basescan.org/tx/${result.playTxHash}`
-    : null;
+  useEffect(() => {
+    if (!result) {
+      setUnlocked(null);
+      return;
+    }
+    celebrate();
+    const selected = selectedBox != null ? BOXES[selectedBox] : null;
+    const prize = buildUnlockedPrize({
+      tier: result.tier,
+      tierName: result.tierName || TIER_NAMES[result.tier],
+      randomSeed: result.randomSeed,
+      gameId: result.gameId,
+      playTxHash: result.playTxHash,
+      boxLabel: selected?.label,
+    });
+    setUnlocked(prize);
+    setStash(saveToCollection(prize));
+  }, [result, celebrate, selectedBox]);
 
   const selected = selectedBox != null ? BOXES[selectedBox] : null;
   const canPlay = selectedBox != null && !isPlaying;
 
   const onReset = () => {
     reset();
+    setUnlocked(null);
     setSelectedBox(null);
   };
 
@@ -84,7 +111,7 @@ export default function PlayPage() {
             How to play
           </p>
           <h1 className="mt-2 font-display text-4xl font-extrabold tracking-[-0.03em] m500:text-3xl">
-            Pick a box. Open it.
+            Pick a box. Win a prize.
           </h1>
           <ol className="mx-auto mt-4 max-w-sm space-y-1.5 text-left font-body text-sm font-medium text-ink/70">
             <li>
@@ -96,10 +123,13 @@ export default function PlayPage() {
               <span className="text-ink">Open</span> (connect wallet if asked)
             </li>
             <li>
-              <span className="font-display font-bold text-ink">3.</span> Watch it
-              seal, then see your rarity
+              <span className="font-display font-bold text-ink">3.</span> Unlock a
+              named prize — rarity from Common to Legendary
             </li>
           </ol>
+          <p className="mt-3 font-body text-[11px] text-ink/40">
+            Odds: Common 60% · Uncommon 25% · Rare 10% · Epic 4% · Legendary 1%
+          </p>
         </header>
 
         <PrizeMachine
@@ -109,7 +139,9 @@ export default function PlayPage() {
           onSelectBox={setSelectedBox}
           tier={result?.tier ?? null}
           tierName={
-            result?.tierName ?? (result ? TIER_NAMES[result.tier] : null)
+            unlocked?.prize.name ??
+            result?.tierName ??
+            (result ? TIER_NAMES[result.tier] : null)
           }
         />
 
@@ -119,36 +151,7 @@ export default function PlayPage() {
           onRetry={selectedBox != null ? play : undefined}
         />
 
-        {result && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="border-4 border-ink bg-ink px-5 py-5 text-center shadow-base"
-          >
-            <p className="font-body text-sm text-butter/70">
-              Box {selected?.label ?? "?"} opened —{" "}
-              <span className="font-display font-bold text-butter">
-                {result.tierName || TIER_NAMES[result.tier]}
-              </span>
-            </p>
-            {basescanPlay && (
-              <a
-                href={basescanPlay}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-butter/50 underline"
-              >
-                Round receipt <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
-            <button
-              onClick={onReset}
-              className="mt-4 block w-full border-2 border-butter bg-butter px-3 py-2.5 font-display text-sm font-bold text-ink"
-            >
-              Pick another box
-            </button>
-          </motion.div>
-        )}
+        {unlocked && <PrizeRevealCard prize={unlocked} onAgain={onReset} />}
 
         {!result && (
           <div className="flex flex-col gap-3">
@@ -177,6 +180,8 @@ export default function PlayPage() {
             </p>
           </div>
         )}
+
+        <StashStrip items={stash} />
       </div>
     </div>
   );
