@@ -1,0 +1,15 @@
+{
+  "network": "devnet",
+  "chainId": 84532,
+  "deployer": "0xa75b46f2d30700d08ee9520c4d3a4e737a2a202f",
+  "MockUSDC": "0xdd23521a92e76cdca3e82071f1b4ec782166abc9",
+  "games": {
+    "CoinFlip": "0x3ad16b94f0e0d82f5b791ab42811bd03ffaa66f4",
+    "Dice": "0xa76a520e38a8162494fb637029a9f48b0ede0fc3",
+    "Mines": "0xc80b78cadab87e19d31a6f6b9d7f20687cb90c0b",
+    "Plinko": "0x25bffcfc75edbbfeeb72d85a5c1cdbbc6096231d",
+    "RockPaperScissors": "0x4a05e62217c606a344406509985bba01aac561ff",
+    "SlotMachine": "0x6317a990f2cec87498b8cb75d5c8db1568dd7e1b"
+  },
+  "timestamp": "2026-06-26T08:45:47.895Z"
+}

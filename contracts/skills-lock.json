@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "lightning": {
+      "source": "Inco-fhevm/skills",
+      "sourceType": "github",
+      "skillPath": "skills/lightning/SKILL.md",
+      "computedHash": "2da5fd8a858cd3273160d3a99650808d261ca8962840ffbf509cd307d6094fd0"
+    }
+  }
+}

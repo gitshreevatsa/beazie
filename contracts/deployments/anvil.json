@@ -1,0 +1,15 @@
+{
+  "network": "anvil",
+  "chainId": 31337,
+  "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "MockUSDC": "0x8a93d247134d91e0de6f96547cb0204e5be8e5d8",
+  "games": {
+    "CoinFlip": "0x40918ba7f132e0acba2ce4de4c4baf9bd2d7d849",
+    "Dice": "0xf32d39ff9f6aa7a7a64d7a4f00a54826ef791a55",
+    "Mines": "0xd6e1afe5ca8d00a2efc01b89997abe2de47fdfaf",
+    "Plinko": "0x99dbe4aea58e518c50a1c04ae9b48c9f6354612f",
+    "RockPaperScissors": "0x6f6f570f45833e249e27022648a26f4076f48f78",
+    "SlotMachine": "0xca8c8688914e0f7096c920146cd0ad85cd7ae8b9"
+  },
+  "timestamp": "2026-06-23T12:06:28.928Z"
+}

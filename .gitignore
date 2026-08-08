@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+out/
+.next/
+artifacts/
+cache/
+coverage/
+typechain-types/
+.turbo/
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs / OS
+*.log
+.DS_Store
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Vercel
+.vercel
+
+# Misc
+*.tsbuildinfo
+next-env.d.ts

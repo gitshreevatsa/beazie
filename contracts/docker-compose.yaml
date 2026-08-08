@@ -1,0 +1,23 @@
+# Inco local node (anvil + covalidator) for the `mainnet` pepper (executor
+# 0x4b9911…8624, matching @inco/lightning/src/Lib.sol and Lightning.localNode("mainnet")).
+# Mirrors https://github.com/Inco-fhevm/inco-lite-template
+#
+#   docker compose up -d      # start
+#   docker compose down       # stop
+#   docker compose logs -f    # tail logs
+services:
+  anvil:
+    image: inconetwork/local-node-anvil-mainnet:v1.0.0
+    # Images are amd64-only; on Apple Silicon, Docker emulates via Rosetta/QEMU.
+    platform: linux/amd64
+    ports:
+      - "8545:8545"
+
+  covalidator:
+    image: inconetwork/local-node-covalidator-mainnet:v1.0.0
+    platform: linux/amd64
+    depends_on:
+      anvil:
+        condition: service_healthy
+    ports:
+      - "50055:50055"

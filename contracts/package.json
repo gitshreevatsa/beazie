@@ -1,0 +1,38 @@
+{
+  "name": "beazie-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Beazie confidential claw machine on Inco Lightning. playPull → attested settle → tier reveal.",
+  "license": "GPL-3.0",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test --network baseSepolia",
+    "test:baseSepolia": "hardhat test --network baseSepolia",
+    "test:local": "hardhat test --network anvil",
+    "test:forge": "forge test -vvv",
+    "deploy:baseSepolia": "hardhat run scripts/deploy-beazie.ts --network baseSepolia",
+    "deploy:local": "hardhat run scripts/deploy-beazie.ts --network anvil",
+    "node:up": "docker compose up -d",
+    "node:down": "docker compose down",
+    "node:logs": "docker compose logs -f",
+    "clean": "hardhat clean && forge clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "@types/chai": "^4.3.16",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.0",
+    "chai": "^4.3.10",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4",
+    "viem": "^2.21.0"
+  },
+  "dependencies": {
+    "@inco/lightning": "latest",
+    "@inco/lightning-js": "latest",
+    "@openzeppelin/contracts": "^5.0.2",
+    "@openzeppelin/contracts-upgradeable": "^5.6.1"
+  }
+}
