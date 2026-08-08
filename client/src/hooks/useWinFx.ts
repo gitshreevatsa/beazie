@@ -1,21 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
 import { confetti } from "@/utils/confetii";
-import { playWinSting } from "@/utils/veilAudio";
+import { useCallback, useEffect, useRef } from "react";
 
-/** Confetti + soft win sting. */
+/** Confetti + arcade win jingle (new file — not the old you-winn.mp3). */
 export function useWinFx() {
-  const celebrate = useCallback(() => {
-    confetti();
-    playWinSting();
-  }, []);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Keep hook signature stable; no MP3 preload needed.
-  const primed = useRef(false);
   useEffect(() => {
-    primed.current = true;
+    if (typeof window === "undefined") return;
+    const a = new Audio("/audio/prize-win.wav");
+    a.volume = 0.55;
+    a.preload = "auto";
+    audioRef.current = a;
   }, []);
 
-  return celebrate;
+  return useCallback(() => {
+    confetti();
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = 0;
+    void a.play().catch(() => {});
+  }, []);
 }

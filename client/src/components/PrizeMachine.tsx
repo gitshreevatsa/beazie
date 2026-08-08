@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { BeazieStage } from "@/utils/beazie";
-import { TIER_COLORS, TIER_NAMES } from "@/utils/contract";
 
 export const BOXES = [
   { id: 0, label: "A", name: "Amber", color: "#FFE566" },
@@ -13,38 +12,54 @@ export const BOXES = [
   { id: 4, label: "E", name: "Ember", color: "#FF8A8E" },
 ] as const;
 
-/** Player-facing phases — no seal/unseal flip-flop. */
-type Phase = "idle" | "opening" | "reveal";
-
-function phaseCopy(phase: Phase, selected: number | null): {
-  title: string;
-  detail: string;
-} {
-  if (phase === "idle") {
-    if (selected == null) {
-      return {
-        title: "Pick a box",
-        detail: "Tap one of the five boxes — that’s the one you’ll open.",
-      };
-    }
+function coachCopy(
+  stage: BeazieStage | null,
+  selected: number | null,
+  hasResult: boolean
+): { title: string; detail: string; step: 0 | 1 | 2 | 3 } {
+  if (hasResult || stage === "done") {
     return {
-      title: "Ready to open",
-      detail: `Box ${BOXES[selected].label} is yours. Press Open below.`,
+      title: "Prize unlocked",
+      detail: "Your card is below — open another when you’re ready.",
+      step: 3,
     };
   }
-  if (phase === "opening") {
+  if (stage === "betting") {
     return {
-      title: "Opening…",
-      detail: "Confirm in your wallet if asked. Hang tight — prize coming up.",
+      title: "Sign #1 — Start the round",
+      detail: "Approve in your wallet. This locks your pick on-chain.",
+      step: 1,
+    };
+  }
+  if (stage === "animating" || stage === "revealing") {
+    return {
+      title: "Working on your prize…",
+      detail: "No wallet popup yet — the box is opening privately.",
+      step: 1,
+    };
+  }
+  if (stage === "settling") {
+    return {
+      title: "Sign #2 — Claim your prize",
+      detail: "One more confirm in your wallet to finish the open.",
+      step: 2,
+    };
+  }
+  if (selected == null) {
+    return {
+      title: "Pick a box",
+      detail: "Tap one box. Its color stays the same — that’s your pick.",
+      step: 0,
     };
   }
   return {
-    title: "You got a prize!",
-    detail: "Check the card below — it’s saved to your stash.",
+    title: "Ready",
+    detail: `Box ${BOXES[selected].label} selected. Press Open — you’ll sign twice.`,
+    step: 0,
   };
 }
 
-/** Interactive mystery boxes — pick → open → prize. */
+/** Pick → open (2 wallet signs with clear on-screen beats) → prize. */
 export function PrizeMachine({
   stage,
   active,
@@ -60,47 +75,90 @@ export function PrizeMachine({
   tier?: number | null;
   tierName?: string | null;
 }) {
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [lidOpen, setLidOpen] = useState(false);
-  const canSelect = !active && phase === "idle" && !tier;
-  const copy = phaseCopy(phase, selectedBox);
+  const [showPrize, setShowPrize] = useState(false);
+  const hasResult = Boolean(tier);
+  const canSelect = !active && !hasResult && (!stage || stage === null);
+  const copy = coachCopy(stage, selectedBox, hasResult);
+  const pickedMeta = selectedBox != null ? BOXES[selectedBox] : null;
+  const inFlight =
+    stage === "betting" ||
+    stage === "animating" ||
+    stage === "revealing" ||
+    stage === "settling";
+  const showHero = pickedMeta != null && (inFlight || hasResult);
 
   useEffect(() => {
-    if (stage === "done" && tier) {
-      setPhase("reveal");
-      setLidOpen(false);
-      const t = setTimeout(() => setLidOpen(true), 350);
+    if (hasResult) {
+      setShowPrize(false);
+      const t = setTimeout(() => setShowPrize(true), 280);
       return () => clearTimeout(t);
     }
-    if (!active || !stage) {
-      setPhase("idle");
-      setLidOpen(false);
-      return;
-    }
-    // Whole chain wait = one continuous “opening” beat
-    setPhase("opening");
-    setLidOpen(false);
-  }, [stage, active, tier]);
-
-  const pickedMeta = selectedBox != null ? BOXES[selectedBox] : null;
-  const revealColor = tier ? TIER_COLORS[tier] ?? "#FFE566" : pickedMeta?.color ?? "#FFE566";
-  const revealLabel = tierName || (tier ? TIER_NAMES[tier] : "");
-  const showHero =
-    pickedMeta != null && (phase === "opening" || phase === "reveal");
+    setShowPrize(false);
+  }, [hasResult, tier]);
 
   return (
     <div className="relative mx-auto w-full">
-      <div className="border-4 border-b-0 border-ink bg-ink px-4 py-3 text-center">
-        <p className="font-display text-sm font-extrabold tracking-wide text-butter">
+      {/* Progress: 2 signatures called out */}
+      <div className="border-4 border-b-0 border-ink bg-ink px-4 py-3">
+        <div className="mb-2 flex items-center justify-center gap-2">
+          {[
+            { n: 1, label: "Start" },
+            { n: 2, label: "Claim" },
+            { n: 3, label: "Prize" },
+          ].map((s) => {
+            const done = copy.step > s.n || (s.n === 3 && hasResult);
+            const current = copy.step === s.n || (s.n === 3 && hasResult && copy.step === 3);
+            return (
+              <div key={s.n} className="flex items-center gap-2">
+                <div
+                  className={`flex h-7 min-w-7 items-center justify-center border-2 border-butter px-1.5 font-display text-[10px] font-extrabold ${
+                    done || current ? "bg-butter text-ink" : "bg-transparent text-butter/40"
+                  }`}
+                >
+                  {s.n}
+                </div>
+                <span
+                  className={`font-body text-[10px] font-semibold ${
+                    done || current ? "text-butter" : "text-butter/35"
+                  }`}
+                >
+                  {s.label}
+                </span>
+                {s.n < 3 && (
+                  <span className="text-butter/25" aria-hidden>
+                    →
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-center font-display text-sm font-extrabold tracking-wide text-butter">
           {copy.title}
         </p>
-        <p className="mt-1 font-body text-xs font-medium leading-snug text-butter/65">
+        <p className="mt-1 text-center font-body text-xs font-medium leading-snug text-butter/65">
           {copy.detail}
         </p>
       </div>
 
       <div className="relative min-h-[400px] w-full overflow-hidden border-4 border-ink bg-cabinet shadow-base">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_15%,rgba(255,229,102,0.25),transparent_55%)]" />
+
+        {/* Stage banner — changes with each wallet beat */}
+        {stage === "settling" && (
+          <div className="absolute left-3 right-3 top-3 z-30 border-2 border-ink bg-butter px-3 py-2 text-center shadow-[3px_3px_0_0_#121212]">
+            <p className="font-display text-xs font-extrabold text-ink">
+              Wallet popup #2 — tap Confirm to claim
+            </p>
+          </div>
+        )}
+        {stage === "betting" && (
+          <div className="absolute left-3 right-3 top-3 z-30 border-2 border-ink bg-main px-3 py-2 text-center shadow-[3px_3px_0_0_#121212]">
+            <p className="font-display text-xs font-extrabold text-ink">
+              Wallet popup #1 — tap Confirm to start
+            </p>
+          </div>
+        )}
 
         <div
           className={`absolute inset-x-0 flex flex-wrap items-center justify-center gap-3 px-3 transition-all duration-500 ${
@@ -109,8 +167,7 @@ export function PrizeMachine({
         >
           {BOXES.map((box) => {
             const isSelected = selectedBox === box.id;
-            const isHero = showHero && isSelected;
-            if (isHero) return null;
+            if (showHero && isSelected) return null;
 
             return (
               <motion.button
@@ -120,22 +177,18 @@ export function PrizeMachine({
                 onClick={() => onSelectBox(box.id)}
                 whileHover={canSelect ? { y: -8, scale: 1.05 } : undefined}
                 whileTap={canSelect ? { scale: 0.95 } : undefined}
-                animate={
-                  phase === "opening" && !isSelected
-                    ? { opacity: 0.25, scale: 0.9 }
-                    : {
-                        opacity: selectedBox != null && !isSelected ? 0.55 : 1,
-                        scale: isSelected ? 1.1 : 1,
-                        y: 0,
-                      }
-                }
+                animate={{
+                  opacity: selectedBox != null && !isSelected ? 0.5 : 1,
+                  scale: isSelected ? 1.08 : 1,
+                  y: 0,
+                }}
                 transition={{ type: "spring", stiffness: 260, damping: 18 }}
                 className={`relative flex h-[100px] w-[78px] flex-col items-center justify-center border-[3px] border-ink shadow-[4px_4px_0_0_#121212] m500:h-[84px] m500:w-[66px] ${
                   canSelect ? "cursor-pointer" : "cursor-default"
                 } ${
                   isSelected
-                    ? "z-10 ring-4 ring-butter ring-offset-2 ring-offset-cabinet"
-                    : "opacity-90"
+                    ? "z-10 ring-4 ring-ink ring-offset-2 ring-offset-cabinet"
+                    : ""
                 }`}
                 style={{ backgroundColor: box.color }}
                 aria-pressed={isSelected}
@@ -148,11 +201,10 @@ export function PrizeMachine({
                   {box.name}
                 </span>
                 {isSelected && canSelect && (
-                  <span className="absolute -top-3 rounded-sm border-2 border-ink bg-main px-1.5 font-display text-[10px] font-extrabold text-ink shadow-[2px_2px_0_0_#121212]">
+                  <span className="absolute -top-3 rounded-sm border-2 border-ink bg-ink px-1.5 font-display text-[10px] font-extrabold text-butter">
                     ✓ YOURS
                   </span>
                 )}
-                <div className="pointer-events-none absolute left-2 right-2 top-[24%] h-[2px] bg-ink/15" />
               </motion.button>
             );
           })}
@@ -161,43 +213,46 @@ export function PrizeMachine({
         <AnimatePresence>
           {showHero && pickedMeta && (
             <motion.div
-              className="absolute left-1/2 top-[16%] z-20 -translate-x-1/2"
+              className="absolute left-1/2 top-[18%] z-20 -translate-x-1/2"
               initial={{ y: 40, scale: 0.85, opacity: 0 }}
               animate={{ y: 0, scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 16 }}
             >
+              {/* Box always keeps its original color */}
               <motion.div
                 className="relative flex h-40 w-36 flex-col items-center justify-center border-[4px] border-ink shadow-base"
-                style={{
-                  backgroundColor:
-                    phase === "reveal" && lidOpen ? revealColor : pickedMeta.color,
-                }}
+                style={{ backgroundColor: pickedMeta.color }}
                 animate={
-                  phase === "opening"
-                    ? { rotate: [-3, 3, -3], scale: [1, 1.04, 1] }
-                    : { scale: lidOpen ? [1, 1.08, 1] : 1 }
+                  stage === "settling"
+                    ? { y: [0, -6, 0], rotate: 0 }
+                    : inFlight && !showPrize
+                      ? { rotate: [-2.5, 2.5, -2.5], scale: [1, 1.03, 1] }
+                      : { scale: showPrize ? [1, 1.06, 1] : 1 }
                 }
                 transition={
-                  phase === "opening"
-                    ? { duration: 0.9, repeat: Infinity, ease: "easeInOut" }
-                    : { duration: 0.45 }
+                  inFlight && !showPrize
+                    ? { duration: 0.85, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.4 }
                 }
               >
-                {!lidOpen ? (
+                {!showPrize ? (
                   <>
                     <span className="font-display text-[11px] font-bold uppercase tracking-[0.2em] text-ink/50">
                       Box {pickedMeta.label}
                     </span>
                     <motion.span
                       className="mt-2 font-display text-4xl font-extrabold text-ink"
-                      animate={{ opacity: [0.4, 1, 0.4] }}
-                      transition={{ duration: 1.1, repeat: Infinity }}
+                      animate={{ opacity: [0.45, 1, 0.45] }}
+                      transition={{ duration: 1, repeat: Infinity }}
                     >
-                      ?
+                      {stage === "settling" ? "!" : "?"}
                     </motion.span>
                     <span className="mt-2 font-body text-xs font-semibold text-ink/60">
-                      Opening…
+                      {stage === "betting"
+                        ? "Waiting for sign…"
+                        : stage === "settling"
+                          ? "Ready to claim"
+                          : "Opening…"}
                     </span>
                   </>
                 ) : (
@@ -205,33 +260,16 @@ export function PrizeMachine({
                     className="flex flex-col items-center px-2 text-center"
                     initial={{ opacity: 0, scale: 0.6 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ type: "spring", stiffness: 260, damping: 14 }}
                   >
                     <span className="font-display text-[10px] font-bold uppercase tracking-[0.2em] text-ink/55">
                       Prize
                     </span>
                     <span className="mt-1 font-display text-xl font-extrabold leading-tight text-ink">
-                      {revealLabel}
+                      {tierName}
                     </span>
                   </motion.div>
                 )}
               </motion.div>
-
-              {lidOpen &&
-                [0, 1, 2, 3, 4, 5].map((p) => (
-                  <motion.div
-                    key={p}
-                    className="absolute left-1/2 top-1/2 h-3 w-3 border-2 border-ink"
-                    style={{ backgroundColor: BOXES[p % BOXES.length].color }}
-                    initial={{ x: 0, y: 0, opacity: 1 }}
-                    animate={{
-                      x: Math.cos((p / 6) * Math.PI * 2) * 72,
-                      y: Math.sin((p / 6) * Math.PI * 2) * 72,
-                      opacity: 0,
-                    }}
-                    transition={{ duration: 0.65, ease: "easeOut" }}
-                  />
-                ))}
             </motion.div>
           )}
         </AnimatePresence>

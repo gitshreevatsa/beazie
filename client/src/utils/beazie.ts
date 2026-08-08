@@ -102,7 +102,7 @@ export async function runPull(
   if (machineId == null || machineId < 0 || machineId > 4) {
     throw new Error("Pick a box first");
   }
-  const animateMs = opts?.animateMs ?? 3000;
+  const animateMs = opts?.animateMs ?? 1400;
   const onStage = opts?.onStage;
 
   const fee = (await readContract(wagmiConfig, {
@@ -137,7 +137,7 @@ export async function runPull(
     seedHandle: Hex;
   };
 
-  // Client-only claw animation — must not leak tier.
+  // Client-only wait — short; screen already moves on stage change.
   onStage?.("animating");
   await sleep(animateMs);
 

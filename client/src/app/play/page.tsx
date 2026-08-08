@@ -50,10 +50,10 @@ function RoundStatus({
   if (!stage || stage === "done") return null;
 
   const messages: Record<Exclude<BeazieStage, "done">, string> = {
-    betting: "Confirm in your wallet…",
-    animating: "Opening your box…",
-    revealing: "Almost there…",
-    settling: "Pulling out your prize…",
+    betting: "Sign #1 in wallet — start the round",
+    animating: "Box is opening… (no signature yet)",
+    revealing: "Preparing your prize…",
+    settling: "Sign #2 in wallet — claim the prize",
   };
 
   return (
@@ -125,11 +125,12 @@ export default function PlayPage() {
             </li>
             <li>
               <span className="font-display font-bold text-ink">2.</span> Press
-              Open (wallet may ask to confirm)
+              Open — you’ll confirm <span className="text-ink">twice</span> in
+              your wallet (start, then claim)
             </li>
             <li>
-              <span className="font-display font-bold text-ink">3.</span> Wait —
-              then your prize pops out
+              <span className="font-display font-bold text-ink">3.</span> Prize
+              pops out after the second confirm
             </li>
           </ol>
           <p className="mt-3 font-body text-[11px] text-ink/40">
