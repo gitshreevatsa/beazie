@@ -15,13 +15,38 @@ export const BOXES = [
 
 type Phase = "idle" | "locking" | "sealed" | "reveal";
 
-function statusFor(phase: Phase, selected: number | null): string {
+function phaseCopy(phase: Phase, selected: number | null): {
+  title: string;
+  detail: string;
+} {
   if (phase === "idle") {
-    return selected == null ? "PICK A BOX" : "READY";
+    if (selected == null) {
+      return {
+        title: "Step 1 — Pick a box",
+        detail: "Tap any colored box below. Only one can be yours.",
+      };
+    }
+    return {
+      title: "Step 2 — Open it",
+      detail: `Box ${BOXES[selected].label} is selected. Hit the big button under the machine.`,
+    };
   }
-  if (phase === "locking") return "LOCKING";
-  if (phase === "sealed") return "SEALED";
-  return "OPENING";
+  if (phase === "locking") {
+    return {
+      title: "Locking your pick…",
+      detail: "Approve in your wallet if it asks. We’re sealing this round.",
+    };
+  }
+  if (phase === "sealed") {
+    return {
+      title: "Prize is sealed",
+      detail: "Nobody can peek yet — including us. Opening in a moment…",
+    };
+  }
+  return {
+    title: "Opened!",
+    detail: "Your rarity is revealed below.",
+  };
 }
 
 /** Interactive mystery boxes — tap to choose, then open. */
@@ -43,6 +68,7 @@ export function PrizeMachine({
   const [phase, setPhase] = useState<Phase>("idle");
   const [lidOpen, setLidOpen] = useState(false);
   const canSelect = !active && phase === "idle" && !tier;
+  const copy = phaseCopy(phase, selectedBox);
 
   useEffect(() => {
     if (stage === "done" && tier) {
@@ -74,48 +100,23 @@ export function PrizeMachine({
 
   return (
     <div className="relative mx-auto w-full">
-      <div className="flex items-center justify-between border-4 border-b-0 border-ink bg-ink px-3 py-2">
-        <span className="font-display text-[10px] font-bold tracking-[0.25em] text-butter/50">
-          VEIL
-        </span>
-        <span
-          className={`font-display text-xs font-extrabold tracking-[0.18em] ${
-            phase === "idle" && selectedBox == null
-              ? "animate-pulse text-butter"
-              : "text-butter"
-          }`}
-        >
-          {statusFor(phase, selectedBox)}
-        </span>
-        <span className="font-display text-[10px] font-bold tracking-[0.25em] text-butter/50">
-          {selectedBox != null ? `BOX ${BOXES[selectedBox].label}` : "·····"}
-        </span>
+      {/* Live coach */}
+      <div className="border-4 border-b-0 border-ink bg-ink px-4 py-3 text-center">
+        <p className="font-display text-sm font-extrabold tracking-wide text-butter">
+          {copy.title}
+        </p>
+        <p className="mt-1 font-body text-xs font-medium leading-snug text-butter/65">
+          {copy.detail}
+        </p>
       </div>
 
-      <div className="relative min-h-[360px] w-full overflow-hidden border-4 border-ink bg-cabinet shadow-base">
+      <div className="relative min-h-[400px] w-full overflow-hidden border-4 border-ink bg-cabinet shadow-base">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_15%,rgba(255,229,102,0.25),transparent_55%)]" />
-
-        {/* Hint */}
-        {canSelect && (
-          <p className="absolute left-0 right-0 top-4 z-10 text-center font-body text-sm font-medium text-butter/80">
-            Tap a box to choose it
-          </p>
-        )}
-        {phase === "locking" && (
-          <p className="absolute left-0 right-0 top-4 z-10 text-center font-display text-sm font-bold tracking-wide text-butter">
-            Locking your pick…
-          </p>
-        )}
-        {phase === "sealed" && (
-          <p className="absolute left-0 right-0 top-4 z-10 text-center font-display text-sm font-bold tracking-wide text-butter">
-            Prize sealed — uncovering…
-          </p>
-        )}
 
         {/* Box grid */}
         <div
-          className={`absolute inset-x-0 flex flex-wrap items-center justify-center gap-3 px-4 transition-all duration-500 ${
-            showHero ? "bottom-6 opacity-40" : "bottom-10 top-14 content-center"
+          className={`absolute inset-x-0 flex flex-wrap items-center justify-center gap-3 px-3 transition-all duration-500 ${
+            showHero ? "bottom-5 opacity-35" : "bottom-8 top-6 content-center"
           }`}
         >
           {BOXES.map((box) => {
@@ -129,35 +130,59 @@ export function PrizeMachine({
                 type="button"
                 disabled={!canSelect}
                 onClick={() => onSelectBox(box.id)}
-                whileHover={canSelect ? { y: -6, scale: 1.04 } : undefined}
-                whileTap={canSelect ? { scale: 0.96 } : undefined}
+                whileHover={canSelect ? { y: -8, scale: 1.05 } : undefined}
+                whileTap={canSelect ? { scale: 0.95 } : undefined}
                 animate={
                   phase === "locking" && isSelected
-                    ? { y: [0, -18, 0], scale: [1, 1.08, 1] }
+                    ? { y: [0, -18, 0], scale: [1, 1.1, 1] }
                     : phase === "locking" && !isSelected
-                      ? { opacity: 0.35, scale: 0.92 }
-                      : { opacity: 1, scale: isSelected ? 1.06 : 1, y: 0 }
+                      ? { opacity: 0.3, scale: 0.9 }
+                      : {
+                          opacity: 1,
+                          scale: isSelected ? 1.08 : 1,
+                          y: canSelect && selectedBox == null ? [0, -4, 0] : 0,
+                        }
                 }
-                transition={{ type: "spring", stiffness: 220, damping: 16 }}
-                className={`relative flex h-[88px] w-[72px] flex-col items-center justify-center border-[3px] border-ink m500:h-[76px] m500:w-[62px] ${
+                transition={
+                  canSelect && selectedBox == null
+                    ? {
+                        y: {
+                          duration: 1.6 + box.id * 0.12,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        },
+                        scale: { type: "spring", stiffness: 220, damping: 16 },
+                      }
+                    : { type: "spring", stiffness: 220, damping: 16 }
+                }
+                className={`relative flex h-[100px] w-[78px] flex-col items-center justify-center border-[3px] border-ink shadow-[4px_4px_0_0_#121212] m500:h-[84px] m500:w-[66px] ${
                   canSelect ? "cursor-pointer" : "cursor-default"
-                } ${isSelected ? "ring-4 ring-butter" : ""}`}
+                } ${
+                  isSelected
+                    ? "z-10 ring-4 ring-butter ring-offset-2 ring-offset-cabinet"
+                    : ""
+                }`}
                 style={{ backgroundColor: box.color }}
                 aria-pressed={isSelected}
-                aria-label={`Box ${box.label}: ${box.name}`}
+                aria-label={`Select box ${box.label}: ${box.name}`}
               >
-                <span className="font-display text-[11px] font-bold uppercase tracking-[0.15em] text-ink/55">
+                <span className="font-display text-[10px] font-bold uppercase tracking-[0.18em] text-ink/50">
                   Box {box.label}
                 </span>
-                <span className="mt-1 font-display text-lg font-extrabold leading-none text-ink">
+                <span className="mt-1 font-display text-base font-extrabold leading-none text-ink m500:text-sm">
                   {box.name}
                 </span>
                 {isSelected && canSelect && (
-                  <span className="absolute -bottom-2 rounded-sm border-2 border-ink bg-ink px-1.5 font-display text-[9px] font-bold text-butter">
-                    SELECTED
+                  <span className="absolute -top-3 rounded-sm border-2 border-ink bg-main px-1.5 font-display text-[10px] font-extrabold text-ink shadow-[2px_2px_0_0_#121212]">
+                    ✓ YOURS
                   </span>
                 )}
-                <div className="pointer-events-none absolute left-2 right-2 top-[22%] h-[2px] bg-ink/20" />
+                {canSelect && !isSelected && selectedBox == null && (
+                  <span className="absolute -bottom-2.5 rounded-sm border border-ink bg-butter px-1 font-display text-[8px] font-bold text-ink">
+                    TAP
+                  </span>
+                )}
+                <div className="pointer-events-none absolute left-2 right-2 top-[24%] h-[2px] bg-ink/15" />
               </motion.button>
             );
           })}
@@ -167,14 +192,14 @@ export function PrizeMachine({
         <AnimatePresence>
           {showHero && (
             <motion.div
-              className="absolute left-1/2 top-[18%] z-20 -translate-x-1/2"
+              className="absolute left-1/2 top-[16%] z-20 -translate-x-1/2"
               initial={{ y: 60, scale: 0.7, opacity: 0 }}
               animate={{ y: 0, scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ type: "spring", stiffness: 200, damping: 16 }}
             >
               <motion.div
-                className="relative flex h-36 w-32 flex-col items-center justify-center border-[4px] border-ink shadow-base"
+                className="relative flex h-40 w-36 flex-col items-center justify-center border-[4px] border-ink shadow-base"
                 style={{
                   backgroundColor:
                     phase === "reveal" && lidOpen ? revealColor : pickedMeta.color,
@@ -195,11 +220,11 @@ export function PrizeMachine({
                     <span className="font-display text-[11px] font-bold uppercase tracking-[0.2em] text-ink/50">
                       Box {pickedMeta.label}
                     </span>
-                    <span className="mt-2 font-display text-3xl font-extrabold text-ink">
+                    <span className="mt-2 font-display text-4xl font-extrabold text-ink">
                       ?
                     </span>
                     <span className="mt-2 font-body text-xs font-semibold text-ink/55">
-                      Sealed
+                      Still sealed
                     </span>
                     <motion.div
                       className="pointer-events-none absolute inset-0 border-4 border-butter/70"

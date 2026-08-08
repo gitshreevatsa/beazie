@@ -5,17 +5,10 @@ import { PrizeMachine, BOXES } from "@/components/PrizeMachine";
 import { useBeazieGame } from "@/hooks/useBeazieGame";
 import { PULL_FEE_ETH, TIER_NAMES } from "@/utils/contract";
 import type { BeazieStage } from "@/utils/beazie";
-import { AlertTriangle, Check, Loader2, RotateCcw, ExternalLink } from "lucide-react";
+import { AlertTriangle, Loader2, RotateCcw, ExternalLink } from "lucide-react";
 import { useWinFx } from "@/hooks/useWinFx";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-
-const STEPS: { key: BeazieStage; label: string }[] = [
-  { key: "betting", label: "Confirm" },
-  { key: "animating", label: "Lock" },
-  { key: "revealing", label: "Seal" },
-  { key: "settling", label: "Open" },
-];
 
 function RoundStatus({
   stage,
@@ -42,34 +35,22 @@ function RoundStatus({
       </div>
     );
   }
+
   if (!stage || stage === "done") return null;
-  const active = STEPS.findIndex((s) => s.key === stage);
+
+  const messages: Record<Exclude<BeazieStage, "done" | null>, string> = {
+    betting: "Confirm in your wallet…",
+    animating: "Locking your box…",
+    revealing: "Unsealing the prize…",
+    settling: "Opening your box…",
+  };
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-4 border-ink bg-white px-4 py-3 shadow-base">
-      {STEPS.map((step, i) => {
-        const done = i < active;
-        const current = i === active;
-        return (
-          <div key={step.key} className="flex items-center gap-1.5">
-            <div
-              className={`flex h-6 w-6 items-center justify-center border-2 border-ink ${
-                done ? "bg-bg" : current ? "bg-butter" : "bg-white"
-              }`}
-            >
-              {done ? (
-                <Check className="h-3.5 w-3.5" />
-              ) : current ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <span className="font-display text-[10px] font-bold">{i + 1}</span>
-              )}
-            </div>
-            <span className="font-body text-xs font-medium text-ink/70">
-              {step.label}
-            </span>
-          </div>
-        );
-      })}
+    <div className="flex items-center justify-center gap-2 border-4 border-ink bg-white px-4 py-3 shadow-base">
+      <Loader2 className="h-4 w-4 animate-spin text-ink" />
+      <span className="font-body text-sm font-semibold text-ink">
+        {messages[stage]}
+      </span>
     </div>
   );
 }
@@ -97,17 +78,28 @@ export default function PlayPage() {
 
   return (
     <div className="min-h-[100svh] bg-bg text-ink">
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 pb-16 pt-28 m500:pt-24">
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 pb-16 pt-28 m500:pt-24">
         <header className="text-center">
           <p className="font-display text-[11px] font-bold uppercase tracking-[0.35em] text-ink/45">
-            Veil
+            How to play
           </p>
-          <h1 className="mt-2 font-display text-5xl font-extrabold tracking-[-0.03em] m500:text-4xl">
-            Pick a box
+          <h1 className="mt-2 font-display text-4xl font-extrabold tracking-[-0.03em] m500:text-3xl">
+            Pick a box. Open it.
           </h1>
-          <p className="mt-3 font-body text-base font-medium leading-snug text-ink/70">
-            Choose one, then open it. Your prize stays private until it unlocks.
-          </p>
+          <ol className="mx-auto mt-4 max-w-sm space-y-1.5 text-left font-body text-sm font-medium text-ink/70">
+            <li>
+              <span className="font-display font-bold text-ink">1.</span> Tap one
+              of the five boxes
+            </li>
+            <li>
+              <span className="font-display font-bold text-ink">2.</span> Press{" "}
+              <span className="text-ink">Open</span> (connect wallet if asked)
+            </li>
+            <li>
+              <span className="font-display font-bold text-ink">3.</span> Watch it
+              seal, then see your rarity
+            </li>
+          </ol>
         </header>
 
         <PrizeMachine
@@ -160,11 +152,16 @@ export default function PlayPage() {
 
         {!result && (
           <div className="flex flex-col gap-3">
-            <p className="text-center font-body text-sm text-ink/55">
-              {selected
-                ? `Selected · Box ${selected.label} (${selected.name})`
-                : "Select a box above to continue"}
-            </p>
+            {!selected && !isPlaying && (
+              <p className="animate-pulse text-center font-display text-sm font-bold text-ink">
+                ↑ Tap a box first — then this button unlocks
+              </p>
+            )}
+            {selected && !isPlaying && (
+              <p className="text-center font-body text-sm font-semibold text-ink/70">
+                Selected: Box {selected.label} · {selected.name}
+              </p>
+            )}
             <PlayButton
               onPlay={play}
               isPlaying={isPlaying}
@@ -176,7 +173,7 @@ export default function PlayPage() {
               }
             />
             <p className="text-center font-body text-xs text-ink/45">
-              {PULL_FEE_ETH} ETH · outcome stays sealed until open
+              Costs {PULL_FEE_ETH} ETH · prize stays hidden until open
             </p>
           </div>
         )}
