@@ -37,7 +37,7 @@ export function PlayButton({
     >
       {isPlaying ? (
         <>
-          <Loader2 className="h-5 w-5 animate-spin" /> Playing…
+          <Loader2 className="h-5 w-5 animate-spin" /> Opening…
         </>
       ) : (
         label

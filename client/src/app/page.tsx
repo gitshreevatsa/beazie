@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 
+const HERO_COLORS = ["#FF5A5F", "#FFE566", "#7FCFB8", "#6EB5FF", "#FF8A8E"];
+
 export default function Home() {
   return (
     <div className="bg-bg text-ink">
@@ -28,10 +30,10 @@ export default function Home() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-none absolute right-[-4%] top-[18%] h-[72vh] w-[min(52vw,520px)] m800:right-[-18%] m800:top-[22%] m800:h-[55vh] m800:w-[70vw]"
+          className="pointer-events-none absolute right-[-2%] top-[20%] h-[65vh] w-[min(48vw,480px)] m800:right-[-12%] m800:top-[24%] m800:h-[50vh] m800:w-[72vw]"
           aria-hidden
         >
-          <HeroVisual />
+          <HeroBoxes />
         </motion.div>
 
         <div className="relative z-10 max-w-xl">
@@ -49,7 +51,7 @@ export default function Home() {
             transition={{ duration: 0.55, delay: 0.18 }}
             className="mt-6 max-w-md font-body text-xl font-medium leading-snug text-ink/80 m500:text-lg"
           >
-            Private prizes. Yours to uncover when you&apos;re ready.
+            Mystery boxes that stay private until you open them.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -61,7 +63,7 @@ export default function Home() {
               href="/play"
               className="inline-flex items-center gap-3 border-4 border-ink bg-ink px-8 py-3.5 font-display text-xl font-bold text-butter shadow-base transition-all hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none"
             >
-              Start playing
+              Play a round
               <span aria-hidden>→</span>
             </Link>
           </motion.div>
@@ -71,14 +73,14 @@ export default function Home() {
       <section className="border-t-4 border-ink bg-ink px-6 py-20 text-butter m500:py-14">
         <div className="mx-auto max-w-3xl">
           <p className="font-display text-xs font-bold uppercase tracking-[0.3em] text-butter/45">
-            How it works
+            The loop
           </p>
           <h2 className="mt-4 font-display text-4xl font-bold tracking-tight m500:text-3xl">
-            Play first. See your prize later.
+            Shuffle. Seal. Open.
           </h2>
           <p className="mt-5 max-w-2xl font-body text-lg leading-relaxed text-butter/80 m500:text-base">
-            Every round locks a private result. Until you uncover it, no one
-            else can see what you won — including us.
+            Boxes dance until one is chosen. Your prize stays sealed until you
+            uncover it — so the fun stays fair.
           </p>
         </div>
       </section>
@@ -87,17 +89,17 @@ export default function Home() {
         <div className="mx-auto flex max-w-5xl flex-col gap-8 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="font-display text-sm font-bold uppercase tracking-[0.2em] text-ink/50">
-              Built for fairness
+              Fair play
             </p>
             <p className="mt-3 max-w-md font-display text-3xl font-bold leading-tight text-ink m500:text-2xl">
-              Transparent when it matters. Private until then.
+              No peeking mid-round. Ever.
             </p>
           </div>
           <Link
             href="/play"
             className="inline-flex w-fit border-4 border-ink bg-main px-6 py-3 font-display text-lg font-bold text-ink shadow-base transition-all hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none"
           >
-            Try a round
+            Try it
           </Link>
         </div>
       </section>
@@ -105,29 +107,35 @@ export default function Home() {
   );
 }
 
-function HeroVisual() {
+function HeroBoxes() {
   return (
     <div className="relative h-full w-full">
-      <div className="absolute inset-x-[8%] bottom-0 top-[8%] border-[5px] border-ink bg-cabinet shadow-strong">
+      <div className="absolute inset-x-[6%] bottom-0 top-[10%] border-[5px] border-ink bg-cabinet shadow-strong">
         <div className="absolute inset-[6%] overflow-hidden border-[3px] border-ink/40 bg-[#2a3f4a]">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(255,229,102,0.25),transparent_55%)]" />
-          <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-3">
-            {[0, 1, 2, 3].map((i) => (
-              <div
+          <div className="absolute inset-x-4 bottom-8 top-10 flex flex-wrap items-end justify-center gap-3 content-end">
+            {HERO_COLORS.map((c, i) => (
+              <motion.div
                 key={i}
-                className="h-12 w-12 animate-floaty border-[3px] border-ink bg-main"
-                style={{
-                  animationDelay: `${i * 0.35}s`,
-                  transform: `rotate(${(i - 1.5) * 10}deg)`,
+                className="relative h-16 w-16 border-[3px] border-ink"
+                style={{ backgroundColor: c }}
+                animate={{
+                  y: [0, -12 - i * 2, 0],
+                  rotate: [-6 + i, 6 - i, -6 + i],
                 }}
-              />
+                transition={{
+                  duration: 2.2 + i * 0.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: i * 0.15,
+                }}
+              >
+                <span className="absolute inset-0 flex items-center justify-center font-display text-2xl font-extrabold text-ink/20">
+                  ?
+                </span>
+                <div className="absolute left-1 right-1 top-[30%] h-[2px] bg-ink/25" />
+              </motion.div>
             ))}
-          </div>
-          <div className="absolute left-1/2 top-0 h-[42%] w-1 origin-top animate-claw-sway bg-butter">
-            <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2">
-              <div className="h-10 w-3.5 origin-top rotate-[-26deg] border-[3px] border-ink bg-butter" />
-              <div className="h-10 w-3.5 origin-top rotate-[26deg] border-[3px] border-ink bg-butter" />
-            </div>
           </div>
         </div>
         <div className="absolute -top-5 left-1/2 -translate-x-1/2 border-[3px] border-ink bg-main px-4 py-1 font-display text-sm font-bold tracking-wide text-ink">

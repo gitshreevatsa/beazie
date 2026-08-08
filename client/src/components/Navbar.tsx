@@ -1,6 +1,7 @@
 import Link from "next/link";
 import MobileDrawer from "@/components/MobileDrawer";
 import NavDropdown from "./NavDropdown";
+import { VeilLogo } from "@/components/VeilLogo";
 
 function Navbar() {
   return (
@@ -10,10 +11,11 @@ function Navbar() {
 
         <div className="flex items-center gap-8 m400:flex-1 m400:pl-5">
           <Link
-            className="font-display text-3xl font-extrabold tracking-tight text-ink m500:text-xl"
             href="/"
+            className="flex items-center gap-2.5 font-display text-3xl font-extrabold tracking-tight text-ink m500:text-xl"
           >
-            Veil
+            <VeilLogo size={36} className="m500:h-8 m500:w-8" />
+            <span>Veil</span>
           </Link>
           <Link
             href="/play"

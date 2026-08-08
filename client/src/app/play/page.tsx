@@ -1,20 +1,20 @@
 "use client";
 
 import { PlayButton } from "@/components/PlayButton";
-import { PrizeMachine } from "@/components/PrizeMachine";
+import { PrizeMachine, BOXES } from "@/components/PrizeMachine";
 import { useBeazieGame } from "@/hooks/useBeazieGame";
-import { PULL_FEE_ETH, TIER_COLORS, TIER_NAMES } from "@/utils/contract";
+import { PULL_FEE_ETH, TIER_NAMES } from "@/utils/contract";
 import type { BeazieStage } from "@/utils/beazie";
 import { AlertTriangle, Check, Loader2, RotateCcw, ExternalLink } from "lucide-react";
 import { useWinFx } from "@/hooks/useWinFx";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 const STEPS: { key: BeazieStage; label: string }[] = [
-  { key: "betting", label: "Start" },
-  { key: "animating", label: "Play" },
-  { key: "revealing", label: "Prepare" },
-  { key: "settling", label: "Uncover" },
+  { key: "betting", label: "Confirm" },
+  { key: "animating", label: "Lock" },
+  { key: "revealing", label: "Seal" },
+  { key: "settling", label: "Open" },
 ];
 
 function RoundStatus({
@@ -77,14 +77,23 @@ function RoundStatus({
 export default function PlayPage() {
   const { stage, error, result, isPlaying, play, reset } = useBeazieGame();
   const celebrate = useWinFx();
+  const [selectedBox, setSelectedBox] = useState<number | null>(null);
 
   useEffect(() => {
-    if (result && result.tier >= 4) celebrate();
+    if (result) celebrate();
   }, [result, celebrate]);
 
   const basescanPlay = result
     ? `https://sepolia.basescan.org/tx/${result.playTxHash}`
     : null;
+
+  const selected = selectedBox != null ? BOXES[selectedBox] : null;
+  const canPlay = selectedBox != null && !isPlaying;
+
+  const onReset = () => {
+    reset();
+    setSelectedBox(null);
+  };
 
   return (
     <div className="min-h-[100svh] bg-bg text-ink">
@@ -94,45 +103,57 @@ export default function PlayPage() {
             Veil
           </p>
           <h1 className="mt-2 font-display text-5xl font-extrabold tracking-[-0.03em] m500:text-4xl">
-            Play a round
+            Pick a box
           </h1>
           <p className="mt-3 font-body text-base font-medium leading-snug text-ink/70">
-            Your prize stays private until you uncover it.
+            Choose one, then open it. Your prize stays private until it unlocks.
           </p>
         </header>
 
-        <PrizeMachine stage={stage} active={isPlaying || stage === "done"} />
+        <PrizeMachine
+          stage={stage}
+          active={isPlaying || Boolean(result)}
+          selectedBox={selectedBox}
+          onSelectBox={setSelectedBox}
+          tier={result?.tier ?? null}
+          tierName={
+            result?.tierName ?? (result ? TIER_NAMES[result.tier] : null)
+          }
+        />
 
-        <RoundStatus stage={stage} error={error} onRetry={play} />
+        <RoundStatus
+          stage={stage}
+          error={error}
+          onRetry={selectedBox != null ? play : undefined}
+        />
 
         {result && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="border-4 border-ink px-5 py-8 text-center shadow-base"
-            style={{ backgroundColor: TIER_COLORS[result.tier] ?? "#FFE566" }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="border-4 border-ink bg-ink px-5 py-5 text-center shadow-base"
           >
-            <p className="font-display text-[11px] font-bold uppercase tracking-[0.25em] text-ink/55">
-              Your prize
-            </p>
-            <p className="mt-2 font-display text-5xl font-extrabold tracking-tight text-ink">
-              {result.tierName || TIER_NAMES[result.tier]}
+            <p className="font-body text-sm text-butter/70">
+              Box {selected?.label ?? "?"} opened —{" "}
+              <span className="font-display font-bold text-butter">
+                {result.tierName || TIER_NAMES[result.tier]}
+              </span>
             </p>
             {basescanPlay && (
               <a
                 href={basescanPlay}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-1 font-body text-sm font-semibold text-ink/70 underline"
+                className="mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-butter/50 underline"
               >
-                View transaction <ExternalLink className="h-3.5 w-3.5" />
+                Round receipt <ExternalLink className="h-3 w-3" />
               </a>
             )}
             <button
-              onClick={reset}
-              className="mt-5 block w-full border-2 border-ink bg-ink px-3 py-2.5 font-display text-sm font-bold text-butter"
+              onClick={onReset}
+              className="mt-4 block w-full border-2 border-butter bg-butter px-3 py-2.5 font-display text-sm font-bold text-ink"
             >
-              Play again
+              Pick another box
             </button>
           </motion.div>
         )}
@@ -140,11 +161,22 @@ export default function PlayPage() {
         {!result && (
           <div className="flex flex-col gap-3">
             <p className="text-center font-body text-sm text-ink/55">
-              {PULL_FEE_ETH} ETH per round
+              {selected
+                ? `Selected · Box ${selected.label} (${selected.name})`
+                : "Select a box above to continue"}
             </p>
-            <PlayButton onPlay={play} isPlaying={isPlaying} label="Play" />
+            <PlayButton
+              onPlay={play}
+              isPlaying={isPlaying}
+              disabled={!canPlay}
+              label={
+                selected
+                  ? `Open Box ${selected.label}`
+                  : "Select a box first"
+              }
+            />
             <p className="text-center font-body text-xs text-ink/45">
-              Results stay hidden until you uncover them.
+              {PULL_FEE_ETH} ETH · outcome stays sealed until open
             </p>
           </div>
         )}
