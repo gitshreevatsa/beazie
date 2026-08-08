@@ -24,26 +24,33 @@ export function useBeazieGame() {
   const [result, setResult] = useState<PullResult | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const play = useCallback(async () => {
-    if (!ctx) {
-      setError("Connect a wallet to play.");
-      return;
-    }
-    setError(null);
-    setResult(null);
-    setIsPlaying(true);
-    setStage("betting");
-    try {
-      const res = await runPull(ctx, { onStage: setStage });
-      setResult(res);
-      setStage("done");
-    } catch (e) {
-      setError(friendlyError(e));
-      setStage(null);
-    } finally {
-      setIsPlaying(false);
-    }
-  }, [ctx]);
+  const play = useCallback(
+    async (machineId: number) => {
+      if (!ctx) {
+        setError("Connect a wallet to play.");
+        return;
+      }
+      if (machineId < 0 || machineId > 4) {
+        setError("Pick a box first — tap A through E.");
+        return;
+      }
+      setError(null);
+      setResult(null);
+      setIsPlaying(true);
+      setStage("betting");
+      try {
+        const res = await runPull(ctx, { machineId, onStage: setStage });
+        setResult(res);
+        setStage("done");
+      } catch (e) {
+        setError(friendlyError(e));
+        setStage(null);
+      } finally {
+        setIsPlaying(false);
+      }
+    },
+    [ctx]
+  );
 
   const reset = useCallback(() => {
     setError(null);

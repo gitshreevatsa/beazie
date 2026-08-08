@@ -148,7 +148,9 @@ export default function PlayPage() {
         <RoundStatus
           stage={stage}
           error={error}
-          onRetry={selectedBox != null ? play : undefined}
+          onRetry={
+            selectedBox != null ? () => play(selectedBox) : undefined
+          }
         />
 
         {unlocked && <PrizeRevealCard prize={unlocked} onAgain={onReset} />}
@@ -157,16 +159,19 @@ export default function PlayPage() {
           <div className="flex flex-col gap-3">
             {!selected && !isPlaying && (
               <p className="animate-pulse text-center font-display text-sm font-bold text-ink">
-                ↑ Tap a box first — then this button unlocks
+                ↑ You choose — tap one box (nothing is pre-selected)
               </p>
             )}
             {selected && !isPlaying && (
               <p className="text-center font-body text-sm font-semibold text-ink/70">
-                Selected: Box {selected.label} · {selected.name}
+                You picked Box {selected.label} · {selected.name}
               </p>
             )}
             <PlayButton
-              onPlay={play}
+              onPlay={() => {
+                if (selectedBox == null) return;
+                void play(selectedBox);
+              }}
               isPlaying={isPlaying}
               disabled={!canPlay}
               label={
@@ -176,7 +181,7 @@ export default function PlayPage() {
               }
             />
             <p className="text-center font-body text-xs text-ink/45">
-              Costs {PULL_FEE_ETH} ETH · prize stays hidden until open
+              Costs {PULL_FEE_ETH} ETH · your box id is recorded on-chain
             </p>
           </div>
         )}

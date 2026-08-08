@@ -92,11 +92,12 @@ export function PrizeMachine({
     }
   }, [stage, active, tier]);
 
-  const picked = selectedBox ?? 0;
-  const pickedMeta = BOXES[picked] ?? BOXES[0];
-  const revealColor = tier ? TIER_COLORS[tier] ?? "#FFE566" : pickedMeta.color;
+  const pickedMeta =
+    selectedBox != null ? BOXES[selectedBox] : null;
+  const revealColor = tier ? TIER_COLORS[tier] ?? "#FFE566" : pickedMeta?.color ?? "#FFE566";
   const revealLabel = tierName || (tier ? TIER_NAMES[tier] : "");
-  const showHero = phase === "sealed" || phase === "reveal";
+  const showHero =
+    pickedMeta != null && (phase === "sealed" || phase === "reveal");
 
   return (
     <div className="relative mx-auto w-full">
@@ -113,7 +114,7 @@ export function PrizeMachine({
       <div className="relative min-h-[400px] w-full overflow-hidden border-4 border-ink bg-cabinet shadow-base">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_15%,rgba(255,229,102,0.25),transparent_55%)]" />
 
-        {/* Box grid */}
+        {/* Box grid — nothing pre-selected; you must tap */}
         <div
           className={`absolute inset-x-0 flex flex-wrap items-center justify-center gap-3 px-3 transition-all duration-500 ${
             showHero ? "bottom-5 opacity-35" : "bottom-8 top-6 content-center"
@@ -136,31 +137,20 @@ export function PrizeMachine({
                   phase === "locking" && isSelected
                     ? { y: [0, -18, 0], scale: [1, 1.1, 1] }
                     : phase === "locking" && !isSelected
-                      ? { opacity: 0.3, scale: 0.9 }
+                      ? { opacity: 0.28, scale: 0.9 }
                       : {
-                          opacity: 1,
-                          scale: isSelected ? 1.08 : 1,
-                          y: canSelect && selectedBox == null ? [0, -4, 0] : 0,
+                          opacity: selectedBox != null && !isSelected ? 0.55 : 1,
+                          scale: isSelected ? 1.1 : 1,
+                          y: 0,
                         }
                 }
-                transition={
-                  canSelect && selectedBox == null
-                    ? {
-                        y: {
-                          duration: 1.6 + box.id * 0.12,
-                          repeat: Infinity,
-                          ease: "easeInOut",
-                        },
-                        scale: { type: "spring", stiffness: 220, damping: 16 },
-                      }
-                    : { type: "spring", stiffness: 220, damping: 16 }
-                }
+                transition={{ type: "spring", stiffness: 260, damping: 18 }}
                 className={`relative flex h-[100px] w-[78px] flex-col items-center justify-center border-[3px] border-ink shadow-[4px_4px_0_0_#121212] m500:h-[84px] m500:w-[66px] ${
                   canSelect ? "cursor-pointer" : "cursor-default"
                 } ${
                   isSelected
                     ? "z-10 ring-4 ring-butter ring-offset-2 ring-offset-cabinet"
-                    : ""
+                    : "opacity-90"
                 }`}
                 style={{ backgroundColor: box.color }}
                 aria-pressed={isSelected}
@@ -177,20 +167,15 @@ export function PrizeMachine({
                     ✓ YOURS
                   </span>
                 )}
-                {canSelect && !isSelected && selectedBox == null && (
-                  <span className="absolute -bottom-2.5 rounded-sm border border-ink bg-butter px-1 font-display text-[8px] font-bold text-ink">
-                    TAP
-                  </span>
-                )}
                 <div className="pointer-events-none absolute left-2 right-2 top-[24%] h-[2px] bg-ink/15" />
               </motion.button>
             );
           })}
         </div>
 
-        {/* Hero sealed / open box */}
+        {/* Hero sealed / open box — only YOUR picked box */}
         <AnimatePresence>
-          {showHero && (
+          {showHero && pickedMeta && (
             <motion.div
               className="absolute left-1/2 top-[16%] z-20 -translate-x-1/2"
               initial={{ y: 60, scale: 0.7, opacity: 0 }}

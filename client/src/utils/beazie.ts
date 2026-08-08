@@ -98,7 +98,10 @@ export async function runPull(
     onStage?: (stage: BeazieStage) => void;
   }
 ): Promise<PullResult> {
-  const machineId = opts?.machineId ?? 0;
+  const machineId = opts?.machineId;
+  if (machineId == null || machineId < 0 || machineId > 4) {
+    throw new Error("Pick a box first");
+  }
   const animateMs = opts?.animateMs ?? 3000;
   const onStage = opts?.onStage;
 
