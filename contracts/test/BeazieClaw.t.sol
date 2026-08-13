@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {IncoTest} from "@inco/lightning/src/test/IncoTest.sol";
-import {euint256, inco} from "@inco/lightning/src/Lib.sol";
+import {inco} from "@inco/lightning/src/Lib.sol";
 import {DecryptionAttestation} from "@inco/lightning/src/lightning-parts/DecryptionAttester.types.sol";
 import {BeazieClaw} from "../contracts/BeazieClaw.sol";
 import {RarityMath} from "../contracts/libraries/RarityMath.sol";
@@ -21,7 +21,7 @@ contract BeazieClawTest is IncoTest {
     }
 
     function _playValue() internal view returns (uint256) {
-        return PULL_FEE + inco.getFee();
+        return PULL_FEE + 2 * inco.getFee();
     }
 
     function _attest(bytes32 handle)
@@ -40,47 +40,63 @@ contract BeazieClawTest is IncoTest {
         processAllOperations();
     }
 
+    function _settle(uint256 gameId) internal {
+        (DecryptionAttestation memory seedAtt, bytes[] memory seedSigs) =
+            _attest(claw.getSeedHandle(gameId));
+        (DecryptionAttestation memory cardAtt, bytes[] memory cardSigs) =
+            _attest(claw.getCardHandle(gameId));
+        vm.prank(player);
+        claw.settle(gameId, seedAtt, seedSigs, cardAtt, cardSigs);
+    }
+
     function test_playPull_createsGame() public {
         uint256 gameId = _playAsPlayer();
 
-        (address p, uint8 machineId, bool settled, uint8 tier) = claw.getGame(gameId);
+        (address p, uint8 machineId, bool settled, uint8 tier, uint256 cardId) = claw.getGame(gameId);
         assertEq(p, player);
         assertEq(machineId, 0);
         assertFalse(settled);
         assertEq(tier, 0);
+        assertEq(cardId, 0);
         assertEq(claw.pendingGame(player), gameId);
+        assertTrue(claw.getCardHandle(gameId) != bytes32(0));
     }
 
-    function test_settle_mapsSeedToTier() public {
+    function test_settle_mapsSeedAndCard() public {
         uint256 gameId = _playAsPlayer();
 
-        bytes32 handle = claw.getSeedHandle(gameId);
-        (DecryptionAttestation memory attestation, bytes[] memory sigs) = _attest(handle);
+        bytes32 seedHandle = claw.getSeedHandle(gameId);
+        bytes32 cardHandle = claw.getCardHandle(gameId);
+        (DecryptionAttestation memory seedAtt, bytes[] memory seedSigs) = _attest(seedHandle);
+        (DecryptionAttestation memory cardAtt, bytes[] memory cardSigs) = _attest(cardHandle);
 
-        uint256 plaintext = uint256(attestation.value);
+        uint256 plaintext = uint256(seedAtt.value);
         uint8 expectedTier = RarityMath.mapSeedToTier(plaintext);
+        uint256 slot = uint256(cardAtt.value) % 4;
+        uint256 expectedCard = uint256(expectedTier - 1) * 4 + slot + 1;
 
         vm.prank(player);
-        claw.settle(gameId, attestation, sigs);
+        claw.settle(gameId, seedAtt, seedSigs, cardAtt, cardSigs);
 
-        (,, bool settled, uint8 tier) = claw.getGame(gameId);
+        (,, bool settled, uint8 tier, uint256 cardId) = claw.getGame(gameId);
         assertTrue(settled);
         assertEq(tier, expectedTier);
+        assertEq(cardId, expectedCard);
         assertEq(claw.pendingGame(player), 0);
     }
 
     function test_cannotSettleTwice() public {
         uint256 gameId = _playAsPlayer();
+        _settle(gameId);
 
-        (DecryptionAttestation memory attestation, bytes[] memory sigs) =
+        (DecryptionAttestation memory seedAtt, bytes[] memory seedSigs) =
             _attest(claw.getSeedHandle(gameId));
-
-        vm.prank(player);
-        claw.settle(gameId, attestation, sigs);
+        (DecryptionAttestation memory cardAtt, bytes[] memory cardSigs) =
+            _attest(claw.getCardHandle(gameId));
 
         vm.prank(player);
         vm.expectRevert(BeazieClaw.AlreadySettled.selector);
-        claw.settle(gameId, attestation, sigs);
+        claw.settle(gameId, seedAtt, seedSigs, cardAtt, cardSigs);
     }
 
     function test_expireGame_refundsAfterTimeout() public {
@@ -91,7 +107,7 @@ contract BeazieClawTest is IncoTest {
 
         claw.expireGame(gameId);
 
-        (,, bool settled,) = claw.getGame(gameId);
+        (,, bool settled,,) = claw.getGame(gameId);
         assertTrue(settled);
         assertEq(player.balance, balBefore + PULL_FEE);
         assertEq(claw.pendingGame(player), 0);
@@ -108,5 +124,9 @@ contract BeazieClawTest is IncoTest {
         vm.prank(player);
         vm.expectRevert(BeazieClaw.InsufficientValue.selector);
         claw.playPull{value: PULL_FEE}(0);
+    }
+
+    function test_playCost_coversTwoFees() public {
+        assertEq(claw.playCost(), PULL_FEE + 2 * inco.getFee());
     }
 }

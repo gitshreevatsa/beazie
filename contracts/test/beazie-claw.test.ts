@@ -40,7 +40,9 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
     }
   });
 
-  async function settleFrom(playHash: Hex): Promise<{ tier: number; gameId: bigint }> {
+  async function settleFrom(
+    playHash: Hex
+  ): Promise<{ tier: number; cardId: bigint; gameId: bigint }> {
     const receipt = await publicClient.waitForTransactionReceipt({ hash: playHash });
     const placed = parseEventLogs({
       abi: claw.abi,
@@ -49,18 +51,26 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
     });
     expect(placed.length).to.equal(1);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { gameId, seedHandle } = (placed[0] as any).args as {
+    const { gameId, seedHandle, cardHandle } = (placed[0] as any).args as {
       gameId: bigint;
       seedHandle: Hex;
+      cardHandle: Hex;
     };
 
-    const { attestation, signatures } = await revealAndFormat(zap, seedHandle);
-    const sTx = await claw.write.settle([gameId, attestation, signatures]);
+    const seed = await revealAndFormat(zap, seedHandle);
+    const card = await revealAndFormat(zap, cardHandle);
+    const sTx = await claw.write.settle([
+      gameId,
+      seed.attestation,
+      seed.signatures,
+      card.attestation,
+      card.signatures,
+    ]);
     const sReceipt = await publicClient.waitForTransactionReceipt({ hash: sTx });
 
     for (let i = 0; i < 30; i++) {
       const g = await claw.read.getGame([gameId]);
-      if (g[2] === true) break; // settled
+      if (g[2] === true) break;
       await sleep(2000);
     }
 
@@ -71,23 +81,29 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
     });
     expect(settled.length).to.equal(1);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tier = Number((settled[0] as any).args.tier);
-    return { tier, gameId };
+    const args = (settled[0] as any).args;
+    return {
+      tier: Number(args.tier),
+      cardId: args.cardId as bigint,
+      gameId,
+    };
   }
 
-  it("playPull → settle reveals a valid tier", async function () {
-    const h = await claw.write.playPull([0], { value: PULL_FEE + fee });
-    const { tier, gameId } = await settleFrom(h);
+  it("playPull → settle reveals tier + cardId", async function () {
+    const h = await claw.write.playPull([0], { value: PULL_FEE + 2n * fee });
+    const { tier, cardId, gameId } = await settleFrom(h);
     expect(tier).to.be.gte(1);
     expect(tier).to.be.lte(5);
+    expect(cardId).to.be.gte(1n);
 
     const g = await claw.read.getGame([gameId]);
-    expect(g[2]).to.equal(true); // settled
+    expect(g[2]).to.equal(true);
     expect(Number(g[3])).to.equal(tier);
+    expect(g[4]).to.equal(cardId);
   });
 
   it("rejects double settle", async function () {
-    const h = await claw.write.playPull([0], { value: PULL_FEE + fee });
+    const h = await claw.write.playPull([0], { value: PULL_FEE + 2n * fee });
     const receipt = await publicClient.waitForTransactionReceipt({ hash: h });
     const placed = parseEventLogs({
       abi: claw.abi,
@@ -95,16 +111,25 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
       logs: receipt.logs,
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { gameId, seedHandle } = (placed[0] as any).args as {
+    const { gameId, seedHandle, cardHandle } = (placed[0] as any).args as {
       gameId: bigint;
       seedHandle: Hex;
+      cardHandle: Hex;
     };
-    const { attestation, signatures } = await revealAndFormat(zap, seedHandle);
-    await claw.write.settle([gameId, attestation, signatures]);
+    const seed = await revealAndFormat(zap, seedHandle);
+    const card = await revealAndFormat(zap, cardHandle);
+    const args = [
+      gameId,
+      seed.attestation,
+      seed.signatures,
+      card.attestation,
+      card.signatures,
+    ];
+    await claw.write.settle(args);
 
     let reverted = false;
     try {
-      await claw.write.settle([gameId, attestation, signatures]);
+      await claw.write.settle(args);
     } catch {
       reverted = true;
     }

@@ -10,7 +10,7 @@ export const beazieClawABI = BeazieClawABI as Abi;
 /** Set via NEXT_PUBLIC_BEAZIE_CLAW_ADDRESS after deploy; falls back to Base Sepolia deploy. */
 export const beazieClawAddress: Address = (process.env
   .NEXT_PUBLIC_BEAZIE_CLAW_ADDRESS ||
-  "0x1524be813f10d4f2fa6c10bfd736ce0abfc5e558") as Address;
+  "0x558e51069b72e922b081f3c29ac995484e66f721") as Address;
 
 export const PULL_FEE_ETH = "0.0001";
 export const PULL_FEE_WEI = parseEther(PULL_FEE_ETH);

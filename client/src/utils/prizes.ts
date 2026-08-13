@@ -69,7 +69,16 @@ export interface UnlockedPrize {
   boxLabel?: string;
 }
 
-/** Deterministic prize pick from on-chain seed so the same round always shows the same item. */
+/** Pick prize from on-chain cardId: (tier-1)*4 + slot + 1 */
+export function prizeFromCardId(tier: number, cardId: bigint | number): PrizeDef {
+  const t = (Math.min(5, Math.max(1, tier)) || 1) as PrizeTier;
+  const pool = PRIZE_POOL[t];
+  const id = typeof cardId === "bigint" ? Number(cardId) : cardId;
+  const slot = Math.max(0, (id - 1) % pool.length);
+  return pool[slot] ?? pool[0];
+}
+
+/** @deprecated prefer prizeFromCardId when cardId is on-chain */
 export function prizeFromSeed(
   tier: number,
   randomSeed: bigint | string | number
@@ -88,16 +97,21 @@ export function buildUnlockedPrize(input: {
   tier: number;
   tierName?: string;
   randomSeed: bigint | string | number;
+  cardId?: bigint | number;
   gameId: bigint | string | number;
   playTxHash: string;
   boxLabel?: string;
 }): UnlockedPrize {
   const tier = (Math.min(5, Math.max(1, input.tier)) || 1) as PrizeTier;
+  const prize =
+    input.cardId != null && Number(input.cardId) > 0
+      ? prizeFromCardId(tier, input.cardId)
+      : prizeFromSeed(tier, input.randomSeed);
   return {
     tier,
     tierName: input.tierName || TIER_NAMES[tier],
     color: TIER_COLORS[tier],
-    prize: prizeFromSeed(tier, input.randomSeed),
+    prize,
     gameId: String(input.gameId),
     playTxHash: input.playTxHash,
     unlockedAt: Date.now(),

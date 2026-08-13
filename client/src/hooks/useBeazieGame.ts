@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useGameContext } from "./useGameContext";
 import { runPull, type BeazieStage, type PullResult } from "@/utils/beazie";
+import type { Hex } from "viem";
 
 function friendlyError(e: unknown): string {
   const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
@@ -17,11 +18,19 @@ function friendlyError(e: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
+export type LiveSeed = {
+  gameId: bigint;
+  seedHandle: Hex;
+  cardHandle: Hex;
+  playTxHash: Hex;
+};
+
 export function useBeazieGame() {
   const { ctx, ready, isConnected } = useGameContext();
   const [stage, setStage] = useState<BeazieStage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PullResult | null>(null);
+  const [liveSeed, setLiveSeed] = useState<LiveSeed | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const play = useCallback(
@@ -36,10 +45,15 @@ export function useBeazieGame() {
       }
       setError(null);
       setResult(null);
+      setLiveSeed(null);
       setIsPlaying(true);
       setStage("betting");
       try {
-        const res = await runPull(ctx, { machineId, onStage: setStage });
+        const res = await runPull(ctx, {
+          machineId,
+          onStage: setStage,
+          onSeed: setLiveSeed,
+        });
         setResult(res);
         setStage("done");
       } catch (e) {
@@ -55,6 +69,7 @@ export function useBeazieGame() {
   const reset = useCallback(() => {
     setError(null);
     setResult(null);
+    setLiveSeed(null);
     setStage(null);
   }, []);
 
@@ -65,6 +80,7 @@ export function useBeazieGame() {
     stage,
     error,
     result,
+    liveSeed,
     isPlaying,
     play,
     reset,

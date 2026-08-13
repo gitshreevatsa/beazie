@@ -37,6 +37,7 @@ function RoundStatus({
         <span className="flex-1 font-body text-sm font-medium">{error}</span>
         {onRetry && (
           <button
+            type="button"
             onClick={onRetry}
             className="flex items-center gap-1 border-2 border-ink bg-butter px-3 py-1.5 font-display text-sm font-bold"
           >
@@ -50,10 +51,10 @@ function RoundStatus({
   if (!stage || stage === "done") return null;
 
   const messages: Record<Exclude<BeazieStage, "done">, string> = {
-    betting: "Sign #1 in wallet — start the round",
-    animating: "Box is opening… (no signature yet)",
-    revealing: "Preparing your prize…",
-    settling: "Sign #2 in wallet — claim the prize",
+    betting: "Confirm start — drawing private seed + card",
+    animating: "Encrypted handles on-chain…",
+    revealing: "Attesting seed + card decrypt…",
+    settling: "Confirm claim — dual attestation settle",
   };
 
   return (
@@ -88,6 +89,7 @@ export default function PlayPage() {
       tier: result.tier,
       tierName: result.tierName || TIER_NAMES[result.tier],
       randomSeed: result.randomSeed,
+      cardId: result.cardId,
       gameId: result.gameId,
       playTxHash: result.playTxHash,
       boxLabel: selected?.label,
@@ -105,36 +107,28 @@ export default function PlayPage() {
     setSelectedBox(null);
   };
 
+  const onPick = (id: number) => {
+    if (isPlaying || result) return;
+    playSelectBlip();
+    if (selectedBox === id) {
+      void play(id);
+      return;
+    }
+    setSelectedBox(id);
+  };
+
   return (
     <div className="min-h-[100svh] bg-bg text-ink">
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 pb-16 pt-28 m500:pt-24">
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 pb-16 pt-28 m500:pt-24">
         <header className="text-center">
-          <div className="mb-3 flex justify-center">
+          <div className="mb-2 flex items-center justify-center gap-3">
             <MusicToggle />
           </div>
-          <p className="font-display text-[11px] font-bold uppercase tracking-[0.35em] text-ink/45">
-            How to play
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-extrabold tracking-[-0.03em] m500:text-3xl">
-            Pick a box. Win a prize.
+          <h1 className="font-display text-4xl font-extrabold tracking-[-0.03em] m500:text-3xl">
+            Tap a box. Open it.
           </h1>
-          <ol className="mx-auto mt-4 max-w-sm space-y-1.5 text-left font-body text-sm font-medium text-ink/70">
-            <li>
-              <span className="font-display font-bold text-ink">1.</span> Tap a
-              box
-            </li>
-            <li>
-              <span className="font-display font-bold text-ink">2.</span> Press
-              Open — you’ll confirm <span className="text-ink">twice</span> in
-              your wallet (start, then claim)
-            </li>
-            <li>
-              <span className="font-display font-bold text-ink">3.</span> Prize
-              pops out after the second confirm
-            </li>
-          </ol>
-          <p className="mt-3 font-body text-[11px] text-ink/40">
-            Odds: Common 60% · Uncommon 25% · Rare 10% · Epic 4% · Legendary 1%
+          <p className="mx-auto mt-2 max-w-sm font-body text-sm font-medium leading-snug text-ink/65">
+            Private seed + card drawn with Inco. Tap twice to open fast.
           </p>
         </header>
 
@@ -142,10 +136,7 @@ export default function PlayPage() {
           stage={stage}
           active={isPlaying || Boolean(result)}
           selectedBox={selectedBox}
-          onSelectBox={(id) => {
-            playSelectBlip();
-            setSelectedBox(id);
-          }}
+          onSelectBox={onPick}
           tier={result?.tier ?? null}
           tierName={
             unlocked?.prize.name ??
@@ -157,25 +148,13 @@ export default function PlayPage() {
         <RoundStatus
           stage={stage}
           error={error}
-          onRetry={
-            selectedBox != null ? () => play(selectedBox) : undefined
-          }
+          onRetry={selectedBox != null ? () => play(selectedBox) : undefined}
         />
 
         {unlocked && <PrizeRevealCard prize={unlocked} onAgain={onReset} />}
 
         {!result && (
-          <div className="flex flex-col gap-3">
-            {!selected && !isPlaying && (
-              <p className="animate-pulse text-center font-display text-sm font-bold text-ink">
-                ↑ You choose — tap one box (nothing is pre-selected)
-              </p>
-            )}
-            {selected && !isPlaying && (
-              <p className="text-center font-body text-sm font-semibold text-ink/70">
-                You picked Box {selected.label} · {selected.name}
-              </p>
-            )}
+          <div className="flex flex-col gap-2">
             <PlayButton
               onPlay={() => {
                 if (selectedBox == null) return;
@@ -186,11 +165,11 @@ export default function PlayPage() {
               label={
                 selected
                   ? `Open Box ${selected.label}`
-                  : "Select a box first"
+                  : "Tap a box to start"
               }
             />
             <p className="text-center font-body text-xs text-ink/45">
-              Costs {PULL_FEE_ETH} ETH · your box id is recorded on-chain
+              {PULL_FEE_ETH} ETH + Inco fees · start then claim
             </p>
           </div>
         )}

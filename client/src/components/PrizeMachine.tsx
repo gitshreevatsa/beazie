@@ -19,42 +19,42 @@ function coachCopy(
 ): { title: string; detail: string; step: 0 | 1 | 2 | 3 } {
   if (hasResult || stage === "done") {
     return {
-      title: "Prize unlocked",
-      detail: "Your card is below — open another when you’re ready.",
+      title: "Opened!",
+      detail: "Prize is below. Play again anytime.",
       step: 3,
     };
   }
   if (stage === "betting") {
     return {
-      title: "Sign #1 — Start the round",
-      detail: "Approve in your wallet. This locks your pick on-chain.",
+      title: "Confirm start",
+      detail: "Wallet #1 — lock your pick + draw a private seed.",
       step: 1,
     };
   }
   if (stage === "animating" || stage === "revealing") {
     return {
-      title: "Working on your prize…",
-      detail: "No wallet popup yet — the box is opening privately.",
+      title: "Seed is private",
+      detail: "Handle is on-chain. Prize still hidden — watch the Inco strip.",
       step: 1,
     };
   }
   if (stage === "settling") {
     return {
-      title: "Sign #2 — Claim your prize",
-      detail: "One more confirm in your wallet to finish the open.",
+      title: "Confirm claim",
+      detail: "Wallet #2 — attest + settle makes the tier public.",
       step: 2,
     };
   }
   if (selected == null) {
     return {
-      title: "Pick a box",
-      detail: "Tap one box. Its color stays the same — that’s your pick.",
+      title: "Tap a box",
+      detail: "One tap to pick. Then hit Open.",
       step: 0,
     };
   }
   return {
-    title: "Ready",
-    detail: `Box ${BOXES[selected].label} selected. Press Open — you’ll sign twice.`,
+    title: `Box ${BOXES[selected].label} ready`,
+    detail: "Hit Open — two quick wallet confirms.",
     step: 0,
   };
 }
@@ -202,7 +202,7 @@ export function PrizeMachine({
                 </span>
                 {isSelected && canSelect && (
                   <span className="absolute -top-3 rounded-sm border-2 border-ink bg-ink px-1.5 font-display text-[10px] font-extrabold text-butter">
-                    ✓ YOURS
+                    TAP AGAIN
                   </span>
                 )}
               </motion.button>

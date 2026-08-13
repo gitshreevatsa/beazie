@@ -35,6 +35,7 @@ export interface PullResult {
   playTxHash: Hex;
   settleTxHash: Hex;
   seedHandle: Hex;
+  cardHandle: Hex;
 }
 
 type Zap = Awaited<ReturnType<typeof Lightning.baseSepoliaTestnet>>;
@@ -50,31 +51,41 @@ export interface SolAttestation {
   value: Hex;
 }
 
-export async function revealAndFormat(
-  seedHandle: Hex,
+function formatAttestation(res: {
+  handle: string;
+  plaintext: { value: bigint | boolean };
+  covalidatorSignatures: Uint8Array[];
+}): { attestation: SolAttestation; signatures: Hex[] } {
+  const raw = res.plaintext.value;
+  const value = pad(
+    toHex(typeof raw === "boolean" ? (raw ? 1 : 0) : raw),
+    { size: 32 }
+  );
+  const signatures = res.covalidatorSignatures.map((s: Uint8Array) => toHex(s));
+  return {
+    attestation: { handle: res.handle as Hex, value },
+    signatures,
+  };
+}
+
+/** Attest one or more revealed handles (Model A). */
+export async function revealAndFormatMany(
+  handles: Hex[],
   outerRetries = 40,
   delayMs = 3000
-): Promise<{ attestation: SolAttestation; signatures: Hex[] }> {
+): Promise<{ attestation: SolAttestation; signatures: Hex[] }[]> {
   const zap = await getZap();
   let lastErr: Error | undefined;
   for (let i = 0; i < outerRetries; i++) {
     try {
-      const [res] = await zap.attestedReveal([seedHandle], {
+      const results = await zap.attestedReveal(handles, {
         backoffConfig: {
           maxRetries: 8,
           baseDelayInMs: 2000,
           backoffFactor: 1.2,
         },
       });
-      const raw: bigint | boolean = res.plaintext.value;
-      const value = pad(
-        toHex(typeof raw === "boolean" ? (raw ? 1 : 0) : raw),
-        { size: 32 }
-      );
-      const signatures = res.covalidatorSignatures.map((s: Uint8Array) =>
-        toHex(s)
-      );
-      return { attestation: { handle: res.handle as Hex, value }, signatures };
+      return results.map(formatAttestation);
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e));
       await new Promise((r) => setTimeout(r, delayMs));
@@ -83,12 +94,21 @@ export async function revealAndFormat(
   throw lastErr ?? new Error("attestedReveal failed after retries");
 }
 
+export async function revealAndFormat(
+  seedHandle: Hex,
+  outerRetries = 40,
+  delayMs = 3000
+): Promise<{ attestation: SolAttestation; signatures: Hex[] }> {
+  const [one] = await revealAndFormatMany([seedHandle], outerRetries, delayMs);
+  return one;
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 /**
- * Full claw pull: playPull → animate → attestedReveal → settle → tier.
+ * playPull (e.rand + e.randBounded) → dual attestedReveal → dual-attestation settle.
  */
 export async function runPull(
   ctx: GameContext,
@@ -96,6 +116,12 @@ export async function runPull(
     machineId?: number;
     animateMs?: number;
     onStage?: (stage: BeazieStage) => void;
+    onSeed?: (info: {
+      gameId: bigint;
+      seedHandle: Hex;
+      cardHandle: Hex;
+      playTxHash: Hex;
+    }) => void;
   }
 ): Promise<PullResult> {
   const machineId = opts?.machineId;
@@ -105,11 +131,21 @@ export async function runPull(
   const animateMs = opts?.animateMs ?? 1400;
   const onStage = opts?.onStage;
 
-  const fee = (await readContract(wagmiConfig, {
-    address: beazieClawAddress,
-    abi: beazieClawABI,
-    functionName: "getFee",
-  })) as bigint;
+  let value: bigint;
+  try {
+    value = (await readContract(wagmiConfig, {
+      address: beazieClawAddress,
+      abi: beazieClawABI,
+      functionName: "playCost",
+    })) as bigint;
+  } catch {
+    const fee = (await readContract(wagmiConfig, {
+      address: beazieClawAddress,
+      abi: beazieClawABI,
+      functionName: "getFee",
+    })) as bigint;
+    value = PULL_FEE_WEI + 2n * fee;
+  }
 
   onStage?.("betting");
   const play = {
@@ -117,7 +153,7 @@ export async function runPull(
     abi: beazieClawABI,
     functionName: "playPull",
     args: [machineId],
-    value: PULL_FEE_WEI + fee,
+    value,
     account: ctx.address,
   } as const;
   await simulateContract(wagmiConfig, play);
@@ -132,24 +168,35 @@ export async function runPull(
     logs: playReceipt.logs,
   });
   if (started.length === 0) throw new Error("no PullStarted event");
-  const { gameId, seedHandle } = started[0].args as unknown as {
+  const { gameId, seedHandle, cardHandle } = started[0].args as unknown as {
     gameId: bigint;
     seedHandle: Hex;
+    cardHandle: Hex;
   };
 
-  // Client-only wait — short; screen already moves on stage change.
+  opts?.onSeed?.({ gameId, seedHandle, cardHandle, playTxHash: playHash });
+
   onStage?.("animating");
   await sleep(animateMs);
 
   onStage?.("revealing");
-  const { attestation, signatures } = await revealAndFormat(seedHandle);
+  const [seedReveal, cardReveal] = await revealAndFormatMany([
+    seedHandle,
+    cardHandle,
+  ]);
 
   onStage?.("settling");
   const settleHash = await writeContract(wagmiConfig, {
     address: beazieClawAddress,
     abi: beazieClawABI,
     functionName: "settle",
-    args: [gameId, attestation, signatures],
+    args: [
+      gameId,
+      seedReveal.attestation,
+      seedReveal.signatures,
+      cardReveal.attestation,
+      cardReveal.signatures,
+    ],
   });
   const settleReceipt = await waitForTransactionReceipt(wagmiConfig, {
     hash: settleHash,
@@ -181,6 +228,7 @@ export async function runPull(
     playTxHash: playHash,
     settleTxHash: settleHash,
     seedHandle,
+    cardHandle,
   };
 }
 
