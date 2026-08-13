@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useGameContext } from "./useGameContext";
-import { runPull, type BeazieStage, type PullResult } from "@/utils/beazie";
+import {
+  peekPity,
+  runPull,
+  type BeazieStage,
+  type PullResult,
+} from "@/utils/beazie";
 import type { Hex } from "viem";
 
 function friendlyError(e: unknown): string {
@@ -11,7 +16,11 @@ function friendlyError(e: unknown): string {
     return "Cancelled — you can try again anytime.";
   if (msg.includes("insufficient funds") || msg.includes("insufficientvalue"))
     return "Not enough ETH for this round.";
-  if (msg.includes("attestedreveal") || msg.includes("covalidator"))
+  if (
+    msg.includes("attestedreveal") ||
+    msg.includes("attesteddecrypt") ||
+    msg.includes("covalidator")
+  )
     return "Still preparing your prize — please try again.";
   if (msg.includes("alreadysettled"))
     return "This round was already uncovered.";
@@ -31,7 +40,22 @@ export function useBeazieGame() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PullResult | null>(null);
   const [liveSeed, setLiveSeed] = useState<LiveSeed | null>(null);
+  const [peekedSlot, setPeekedSlot] = useState<number | null>(null);
+  const [pity, setPity] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const refreshPity = useCallback(async () => {
+    if (!ctx?.walletClient || !ctx.address) {
+      setPity(null);
+      return;
+    }
+    const n = await peekPity(ctx.walletClient, ctx.address);
+    setPity(n);
+  }, [ctx]);
+
+  useEffect(() => {
+    void refreshPity();
+  }, [refreshPity]);
 
   const play = useCallback(
     async (machineId: number) => {
@@ -46,6 +70,7 @@ export function useBeazieGame() {
       setError(null);
       setResult(null);
       setLiveSeed(null);
+      setPeekedSlot(null);
       setIsPlaying(true);
       setStage("betting");
       try {
@@ -53,9 +78,11 @@ export function useBeazieGame() {
           machineId,
           onStage: setStage,
           onSeed: setLiveSeed,
+          onPeek: setPeekedSlot,
         });
         setResult(res);
         setStage("done");
+        void refreshPity();
       } catch (e) {
         setError(friendlyError(e));
         setStage(null);
@@ -63,13 +90,14 @@ export function useBeazieGame() {
         setIsPlaying(false);
       }
     },
-    [ctx]
+    [ctx, refreshPity]
   );
 
   const reset = useCallback(() => {
     setError(null);
     setResult(null);
     setLiveSeed(null);
+    setPeekedSlot(null);
     setStage(null);
   }, []);
 
@@ -81,8 +109,11 @@ export function useBeazieGame() {
     error,
     result,
     liveSeed,
+    peekedSlot,
+    pity,
     isPlaying,
     play,
     reset,
+    refreshPity,
   };
 }

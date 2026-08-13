@@ -21,13 +21,47 @@ import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
 import { useWinFx } from "@/hooks/useWinFx";
 import { useEffect, useState } from "react";
 
+const PITY_THRESHOLD = 8;
+
+function PityMeter({ pity }: { pity: number | null }) {
+  if (pity == null) return null;
+  const capped = Math.min(PITY_THRESHOLD, Math.max(0, pity));
+  const pct = (capped / PITY_THRESHOLD) * 100;
+  const near = capped >= PITY_THRESHOLD - 1;
+
+  return (
+    <div className="border-4 border-ink bg-white px-3 py-2.5 shadow-base">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <p className="font-display text-[10px] font-extrabold uppercase tracking-[0.22em] text-ink">
+          Pity
+        </p>
+        <p className="font-body text-[11px] font-semibold text-ink/55">
+          {capped}/{PITY_THRESHOLD}
+          {near ? " · next open leans legendary" : ""}
+        </p>
+      </div>
+      <div className="h-2 w-full border-2 border-ink bg-bg">
+        <div
+          className="h-full bg-butter transition-[width] duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-1.5 font-body text-[10px] text-ink/40">
+        Private decrypt of your dry streak — only you can read it.
+      </p>
+    </div>
+  );
+}
+
 function RoundStatus({
   stage,
   error,
+  peekedSlot,
   onRetry,
 }: {
   stage: BeazieStage | null;
   error: string | null;
+  peekedSlot: number | null;
   onRetry?: () => void;
 }) {
   if (error) {
@@ -51,24 +85,41 @@ function RoundStatus({
   if (!stage || stage === "done") return null;
 
   const messages: Record<Exclude<BeazieStage, "done">, string> = {
-    betting: "Confirm start — drawing private seed + card",
+    betting: "Confirm start — drawing seed + shuffled deck",
     animating: "Encrypted handles on-chain…",
-    revealing: "Attesting seed + card decrypt…",
-    settling: "Confirm claim — dual attestation settle",
+    peeking: "Private peek — sign to decrypt your card",
+    revealing: "Public seed attest + private card settle…",
+    settling: "Confirm claim — mint your Veil NFT",
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 border-4 border-ink bg-white px-4 py-3 shadow-base">
-      <Loader2 className="h-4 w-4 animate-spin text-ink" />
-      <span className="font-body text-sm font-semibold text-ink">
-        {messages[stage]}
-      </span>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-center gap-2 border-4 border-ink bg-white px-4 py-3 shadow-base">
+        <Loader2 className="h-4 w-4 animate-spin text-ink" />
+        <span className="font-body text-sm font-semibold text-ink">
+          {messages[stage]}
+        </span>
+      </div>
+      {peekedSlot != null && (
+        <p className="text-center font-body text-xs font-semibold text-ink/55">
+          Peeked card slot {peekedSlot + 1}/4 (private)
+        </p>
+      )}
     </div>
   );
 }
 
 export default function PlayPage() {
-  const { stage, error, result, isPlaying, play, reset } = useBeazieGame();
+  const {
+    stage,
+    error,
+    result,
+    isPlaying,
+    play,
+    reset,
+    peekedSlot,
+    pity,
+  } = useBeazieGame();
   const celebrate = useWinFx();
   const [selectedBox, setSelectedBox] = useState<number | null>(null);
   const [unlocked, setUnlocked] = useState<UnlockedPrize | null>(null);
@@ -90,6 +141,7 @@ export default function PlayPage() {
       tierName: result.tierName || TIER_NAMES[result.tier],
       randomSeed: result.randomSeed,
       cardId: result.cardId,
+      tokenId: result.tokenId,
       gameId: result.gameId,
       playTxHash: result.playTxHash,
       boxLabel: selected?.label,
@@ -127,10 +179,9 @@ export default function PlayPage() {
           <h1 className="font-display text-4xl font-extrabold tracking-[-0.03em] m500:text-3xl">
             Tap a box. Open it.
           </h1>
-          <p className="mx-auto mt-2 max-w-sm font-body text-sm font-medium leading-snug text-ink/65">
-            Private seed + card drawn with Inco. Tap twice to open fast.
-          </p>
         </header>
+
+        <PityMeter pity={pity} />
 
         <PrizeMachine
           stage={stage}
@@ -148,6 +199,7 @@ export default function PlayPage() {
         <RoundStatus
           stage={stage}
           error={error}
+          peekedSlot={peekedSlot}
           onRetry={selectedBox != null ? () => play(selectedBox) : undefined}
         />
 
@@ -169,7 +221,7 @@ export default function PlayPage() {
               }
             />
             <p className="text-center font-body text-xs text-ink/45">
-              {PULL_FEE_ETH} ETH + Inco fees · start then claim
+              {PULL_FEE_ETH} ETH + Inco fees · private peek then claim NFT
             </p>
           </div>
         )}

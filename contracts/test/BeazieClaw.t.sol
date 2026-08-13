@@ -2,8 +2,9 @@
 pragma solidity ^0.8.30;
 
 import {IncoTest} from "@inco/lightning/src/test/IncoTest.sol";
-import {inco} from "@inco/lightning/src/Lib.sol";
+import {inco, ETypes} from "@inco/lightning/src/Lib.sol";
 import {DecryptionAttestation} from "@inco/lightning/src/lightning-parts/DecryptionAttester.types.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {BeazieClaw} from "../contracts/BeazieClaw.sol";
 import {RarityMath} from "../contracts/libraries/RarityMath.sol";
 
@@ -20,8 +21,24 @@ contract BeazieClawTest is IncoTest {
         vm.deal(address(claw), 1 ether);
     }
 
-    function _playValue() internal view returns (uint256) {
-        return PULL_FEE + 2 * inco.getFee();
+    /// @dev Foundry mock resolves scalar ops only. elist range/shuffle/get emit
+    ///      unsupported selectors — skip those so rand/add/select still resolve.
+    function _processOpsSkippingElist() internal {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].emitter != address(inco)) continue;
+            try this.tryHandleIncoLog(logs[i]) {} catch {}
+        }
+    }
+
+    /// @dev External wrapper so try/catch can swallow unsupported elist selectors.
+    function tryHandleIncoLog(Vm.Log calldata log) external {
+        handleIncoLog(log);
+    }
+
+    function _playValue() internal pure returns (uint256) {
+        uint256 elistFee = inco.getEListFee(4, ETypes.Uint256);
+        return PULL_FEE + inco.getFee() + 2 * elistFee;
     }
 
     function _attest(bytes32 handle)
@@ -37,7 +54,10 @@ contract BeazieClawTest is IncoTest {
         uint256 value = _playValue();
         vm.prank(player);
         gameId = claw.playPull{value: value}(0);
-        processAllOperations();
+        _processOpsSkippingElist();
+        // Mock doesn't materialize elist draws — seed a deterministic slot for attest.
+        set(claw.getCardHandle(gameId), bytes32(uint256(2)));
+        vm.recordLogs();
     }
 
     function _settle(uint256 gameId) internal {
@@ -52,17 +72,19 @@ contract BeazieClawTest is IncoTest {
     function test_playPull_createsGame() public {
         uint256 gameId = _playAsPlayer();
 
-        (address p, uint8 machineId, bool settled, uint8 tier, uint256 cardId) = claw.getGame(gameId);
+        (address p, uint8 machineId, bool settled, uint8 tier, uint256 cardId, uint256 tokenId) =
+            claw.getGame(gameId);
         assertEq(p, player);
         assertEq(machineId, 0);
         assertFalse(settled);
         assertEq(tier, 0);
         assertEq(cardId, 0);
+        assertEq(tokenId, 0);
         assertEq(claw.pendingGame(player), gameId);
         assertTrue(claw.getCardHandle(gameId) != bytes32(0));
     }
 
-    function test_settle_mapsSeedAndCard() public {
+    function test_settle_mapsSeedAndCard_mintsNFT() public {
         uint256 gameId = _playAsPlayer();
 
         bytes32 seedHandle = claw.getSeedHandle(gameId);
@@ -78,11 +100,19 @@ contract BeazieClawTest is IncoTest {
         vm.prank(player);
         claw.settle(gameId, seedAtt, seedSigs, cardAtt, cardSigs);
 
-        (,, bool settled, uint8 tier, uint256 cardId) = claw.getGame(gameId);
+        (,, bool settled, uint8 tier, uint256 cardId, uint256 tokenId) = claw.getGame(gameId);
         assertTrue(settled);
         assertEq(tier, expectedTier);
         assertEq(cardId, expectedCard);
+        assertEq(tokenId, 1);
         assertEq(claw.pendingGame(player), 0);
+        assertEq(claw.ownerOf(tokenId), player);
+        assertEq(claw.balanceOf(player), 1);
+
+        (uint8 metaTier, uint256 metaCard, uint256 metaGame) = claw.prizeOf(tokenId);
+        assertEq(metaTier, expectedTier);
+        assertEq(metaCard, expectedCard);
+        assertEq(metaGame, gameId);
     }
 
     function test_cannotSettleTwice() public {
@@ -107,7 +137,7 @@ contract BeazieClawTest is IncoTest {
 
         claw.expireGame(gameId);
 
-        (,, bool settled,,) = claw.getGame(gameId);
+        (,, bool settled,,,) = claw.getGame(gameId);
         assertTrue(settled);
         assertEq(player.balance, balBefore + PULL_FEE);
         assertEq(claw.pendingGame(player), 0);
@@ -126,7 +156,8 @@ contract BeazieClawTest is IncoTest {
         claw.playPull{value: PULL_FEE}(0);
     }
 
-    function test_playCost_coversTwoFees() public {
-        assertEq(claw.playCost(), PULL_FEE + 2 * inco.getFee());
+    function test_playCost_coversRandAndShuffledRange() public {
+        uint256 elistFee = inco.getEListFee(4, ETypes.Uint256);
+        assertEq(claw.playCost(), PULL_FEE + inco.getFee() + 2 * elistFee);
     }
 }

@@ -27,21 +27,24 @@ function coachCopy(
   if (stage === "betting") {
     return {
       title: "Confirm start",
-      detail: "Wallet #1 — lock your pick + draw a private seed.",
+      detail: "Wallet #1 — draw private seed + shuffled deck.",
       step: 1,
     };
   }
-  if (stage === "animating" || stage === "revealing") {
+  if (stage === "animating" || stage === "peeking" || stage === "revealing") {
     return {
-      title: "Seed is private",
-      detail: "Handle is on-chain. Prize still hidden — watch the Inco strip.",
+      title: stage === "peeking" ? "Private peek" : "Seed is private",
+      detail:
+        stage === "peeking"
+          ? "Sign to decrypt your card — only you can see it."
+          : "Handles on-chain. Attesting seed + card…",
       step: 1,
     };
   }
   if (stage === "settling") {
     return {
       title: "Confirm claim",
-      detail: "Wallet #2 — attest + settle makes the tier public.",
+      detail: "Settle makes the tier public and mints your NFT.",
       step: 2,
     };
   }
@@ -179,11 +182,11 @@ export function PrizeMachine({
                 whileTap={canSelect ? { scale: 0.95 } : undefined}
                 animate={{
                   opacity: selectedBox != null && !isSelected ? 0.5 : 1,
-                  scale: isSelected ? 1.08 : 1,
+                  scale: isSelected ? 1.06 : 1,
                   y: 0,
                 }}
                 transition={{ type: "spring", stiffness: 260, damping: 18 }}
-                className={`relative flex h-[100px] w-[78px] flex-col items-center justify-center border-[3px] border-ink shadow-[4px_4px_0_0_#121212] m500:h-[84px] m500:w-[66px] ${
+                className={`relative flex h-[104px] w-[84px] flex-col items-center justify-center overflow-hidden border-[3px] border-ink px-1.5 py-2 shadow-[4px_4px_0_0_#121212] m500:h-[88px] m500:w-[70px] ${
                   canSelect ? "cursor-pointer" : "cursor-default"
                 } ${
                   isSelected
@@ -194,14 +197,14 @@ export function PrizeMachine({
                 aria-pressed={isSelected}
                 aria-label={`Select box ${box.label}: ${box.name}`}
               >
-                <span className="font-display text-[10px] font-bold uppercase tracking-[0.18em] text-ink/50">
+                <span className="font-display text-[9px] font-bold uppercase tracking-[0.12em] text-ink/45">
                   Box {box.label}
                 </span>
-                <span className="mt-1 font-display text-base font-extrabold leading-none text-ink m500:text-sm">
+                <span className="mt-0.5 max-w-full truncate font-display text-sm font-extrabold leading-tight text-ink m500:text-xs">
                   {box.name}
                 </span>
                 {isSelected && canSelect && (
-                  <span className="absolute -top-3 rounded-sm border-2 border-ink bg-ink px-1.5 font-display text-[10px] font-extrabold text-butter">
+                  <span className="mt-1.5 max-w-full truncate rounded-sm border border-ink bg-ink px-1 font-display text-[8px] font-extrabold leading-none text-butter">
                     TAP AGAIN
                   </span>
                 )}

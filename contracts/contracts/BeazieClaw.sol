@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.30;
 
-import {euint256, ebool, e, inco} from "@inco/lightning/src/Lib.sol";
+import {euint256, ebool, e, inco, elist, ETypes} from "@inco/lightning/src/Lib.sol";
 import {DecryptionAttestation} from "@inco/lightning/src/lightning-parts/DecryptionAttester.types.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {RarityMath} from "./libraries/RarityMath.sol";
 
-/// @title BeazieClaw
+/// @title BeazieClaw (Veil)
 /// @notice Confidential mystery-box pulls on Inco Lightning (Base Sepolia).
-/// @dev Inco surface area used deliberately:
-///      - e.rand()              full-width confidential seed (tier entropy)
-///      - e.randBounded(n)      confidential card slot in [0, CARD_POOL)
-///      - e.add                 mix machineId into seed without plaintext branch
-///      - e.ge / e.select       encrypted pity force-legendary (no if on ebool)
-///      - e.allowThis / e.allow contract + player access (selective decrypt)
-///      - e.reveal              queue public attestations for Model A settle
-///      - isValidDecryptionAttestation  dual-handle settle (seed + card)
-contract BeazieClaw is Ownable {
+/// @dev Inco surface deliberately used:
+///      - e.rand()                         confidential tier seed
+///      - e.shuffledRange + e.getEuint256  encrypted deck draw (card slot)
+///      - e.add / e.ge / e.select          salt + encrypted pity force-legendary
+///      - e.allowThis / e.allow            contract + player ACL
+///      - e.reveal(seed only)              public Model A settle for tier
+///      - card stays private until player attestedDecrypt → settle
+///      - ERC-721 mint on settle
+contract BeazieClaw is ERC721, Ownable {
     using e for *;
+    using Strings for uint256;
 
     uint256 public constant PULL_FEE = 0.0001 ether;
     uint256 public constant GAME_TIMEOUT = 15 minutes;
@@ -29,19 +33,28 @@ contract BeazieClaw is Ownable {
     struct Game {
         address player;
         uint8 machineId;
-        euint256 seed; // salted seed handle (revealed)
-        euint256 cardSlot; // [0, CARD_POOL) (revealed)
+        euint256 seed; // salted seed (public reveal)
+        euint256 cardSlot; // [0, CARD_POOL) — private until player decrypt
         uint64 createdAt;
         bool settled;
         uint8 tier; // 0 unset, 1–5 after settle
-        uint256 cardId; // 0 unset; (tier-1)*CARD_POOL + slot + 1 after settle
+        uint256 cardId; // flavor id: (tier-1)*CARD_POOL + slot + 1
+        uint256 tokenId; // ERC-721 id minted on settle (0 unset)
+    }
+
+    struct PrizeMeta {
+        uint8 tier;
+        uint256 cardId;
+        uint256 gameId;
     }
 
     uint256 public nextGameId;
+    uint256 public nextTokenId;
     mapping(uint256 => Game) internal _games;
     mapping(address => uint256) internal _pendingGame; // 0 = none; else gameId+1
     /// @dev Encrypted consecutive non-legendary count (updated at settle).
     mapping(address => euint256) internal _pity;
+    mapping(uint256 => PrizeMeta) internal _prizeOf;
 
     uint8 private constant _NOT_ENTERED = 1;
     uint8 private constant _ENTERED = 2;
@@ -68,7 +81,8 @@ contract BeazieClaw is Ownable {
         address indexed player,
         uint8 tier,
         uint256 cardId,
-        uint256 randomSeed
+        uint256 randomSeed,
+        uint256 tokenId
     );
     event PullExpired(uint256 indexed gameId, address indexed player, uint256 refund);
     event Funded(address indexed from, uint256 amount);
@@ -81,20 +95,20 @@ contract BeazieClaw is Ownable {
         _entered = _NOT_ENTERED;
     }
 
-    constructor() Ownable(msg.sender) {}
+    constructor() ERC721("Veil Prize", "VEIL") Ownable(msg.sender) {}
 
     receive() external payable {
         emit Funded(msg.sender, msg.value);
     }
 
-    /// @notice Inco fee for one randomness op (rand / randBounded).
+    /// @notice Inco fee for one randomness op (e.rand).
     function getFee() external view returns (uint256) {
         return inco.getFee();
     }
 
-    /// @notice ETH pull fee + fees for two randomness ops.
+    /// @notice ETH pull fee + e.rand + shuffledRange (range + shuffle elist fees).
     function playCost() external view returns (uint256) {
-        return PULL_FEE + 2 * inco.getFee();
+        return PULL_FEE + _incoDrawCost();
     }
 
     function pullFee(uint8 /* machineId */) external pure returns (uint256) {
@@ -109,10 +123,17 @@ contract BeazieClaw is Ownable {
     function getGame(uint256 gameId)
         external
         view
-        returns (address player, uint8 machineId, bool settled, uint8 tier, uint256 cardId)
+        returns (
+            address player,
+            uint8 machineId,
+            bool settled,
+            uint8 tier,
+            uint256 cardId,
+            uint256 tokenId
+        )
     {
         Game storage g = _games[gameId];
-        return (g.player, g.machineId, g.settled, g.tier, g.cardId);
+        return (g.player, g.machineId, g.settled, g.tier, g.cardId, g.tokenId);
     }
 
     function getSeedHandle(uint256 gameId) external view returns (bytes32) {
@@ -132,15 +153,23 @@ contract BeazieClaw is Ownable {
         return euint256.unwrap(_pity[player]);
     }
 
-    /// @notice Draw confidential seed + card; grant player decrypt; queue public reveals.
+    function prizeOf(uint256 tokenId) external view returns (uint8 tier, uint256 cardId, uint256 gameId) {
+        PrizeMeta memory m = _prizeOf[tokenId];
+        return (m.tier, m.cardId, m.gameId);
+    }
+
+    /// @notice Draw confidential seed + deck card; grant player decrypt; reveal seed only.
     function playPull(uint8 machineId) external payable nonReentrant returns (uint256 gameId) {
-        uint256 incoFee = inco.getFee();
-        // Two fee-charging draws: e.rand + e.randBounded
-        if (msg.value < PULL_FEE + 2 * incoFee) revert InsufficientValue();
+        uint256 drawCost = _incoDrawCost();
+        if (msg.value < PULL_FEE + drawCost) revert InsufficientValue();
 
         // --- confidential RNG ---
         euint256 rawSeed = e.rand();
-        euint256 cardSlot = e.randBounded(CARD_POOL);
+
+        // Encrypted 4-card deck, deal top card (uniform slot in [0, CARD_POOL)).
+        elist deck = e.shuffledRange(0, uint16(CARD_POOL), ETypes.Uint256);
+        e.allowThis(deck);
+        euint256 cardSlot = e.getEuint256(deck, 0);
 
         // Mix box id into seed with encrypted add (no plaintext branch on outcome).
         euint256 salted = rawSeed.add(e.asEuint256(uint256(machineId)));
@@ -158,16 +187,16 @@ contract BeazieClaw is Ownable {
         euint256 forced = e.asEuint256(9950);
         euint256 seed = e.select(forceLeg, forced, salted);
 
-        // Access control: contract retains ops; player can privately decrypt (Model B).
+        // Access: contract retains ops; player can privately decrypt card + seed.
         e.allowThis(seed);
         e.allowThis(cardSlot);
         e.allowThis(pity);
         e.allow(seed, msg.sender);
         e.allow(cardSlot, msg.sender);
 
-        // Public reveal queue for Model A settle (attestation verify on-chain).
+        // Public reveal queue for Model A settle on seed only.
+        // Card stays private — settle uses player attestedDecrypt attestation.
         e.reveal(seed);
-        e.reveal(cardSlot);
 
         gameId = nextGameId++;
         _games[gameId] = Game({
@@ -178,7 +207,8 @@ contract BeazieClaw is Ownable {
             createdAt: uint64(block.timestamp),
             settled: false,
             tier: 0,
-            cardId: 0
+            cardId: 0,
+            tokenId: 0
         });
         _pendingGame[msg.sender] = gameId + 1;
 
@@ -187,7 +217,7 @@ contract BeazieClaw is Ownable {
         );
     }
 
-    /// @notice Dual attestation settle: seed → tier, cardSlot → cardId.
+    /// @notice Dual attestation settle: public seed reveal + private card decrypt → mint NFT.
     function settle(
         uint256 gameId,
         DecryptionAttestation calldata seedAttestation,
@@ -212,16 +242,20 @@ contract BeazieClaw is Ownable {
         uint256 plaintextSeed = uint256(seedAttestation.value);
         uint256 slot = uint256(cardAttestation.value) % CARD_POOL;
         uint8 tier = RarityMath.mapSeedToTier(plaintextSeed);
-        // Stable card id space: per-tier pools of CARD_POOL
         uint256 cardId = uint256(tier - 1) * CARD_POOL + slot + 1;
+
+        uint256 tokenId = ++nextTokenId;
+        _safeMint(game.player, tokenId);
+        _prizeOf[tokenId] = PrizeMeta({tier: tier, cardId: cardId, gameId: gameId});
 
         game.settled = true;
         game.tier = tier;
         game.cardId = cardId;
+        game.tokenId = tokenId;
         _clearPending(game.player, gameId);
         _updatePity(game.player, tier);
 
-        emit PullSettled(gameId, game.player, tier, cardId, plaintextSeed);
+        emit PullSettled(gameId, game.player, tier, cardId, plaintextSeed, tokenId);
     }
 
     function expireGame(uint256 gameId) external nonReentrant {
@@ -244,8 +278,42 @@ contract BeazieClaw is Ownable {
         emit Withdrawn(owner(), amount);
     }
 
-    /// @dev After public tier is known, refresh encrypted pity with e.select-free plaintext branch
-    ///      (tier is attested plaintext here — confidential phase already ended).
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        _requireOwned(tokenId);
+        PrizeMeta memory m = _prizeOf[tokenId];
+        string memory name_ = string.concat("Veil Prize #", tokenId.toString());
+        string memory desc = string.concat(
+            "Confidential mystery-box prize. Tier ",
+            uint256(m.tier).toString(),
+            ", card ",
+            m.cardId.toString(),
+            ", game ",
+            m.gameId.toString(),
+            "."
+        );
+        string memory json = string.concat(
+            '{"name":"',
+            name_,
+            '","description":"',
+            desc,
+            '","attributes":[{"trait_type":"tier","value":',
+            uint256(m.tier).toString(),
+            '},{"trait_type":"cardId","value":',
+            m.cardId.toString(),
+            '},{"trait_type":"gameId","value":',
+            m.gameId.toString(),
+            "}]}"
+        );
+        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
+    }
+
+    /// @dev e.rand fee + 2× elist fee for shuffledRange(range + shuffle).
+    function _incoDrawCost() private view returns (uint256) {
+        uint256 elistFee = inco.getEListFee(uint16(CARD_POOL), ETypes.Uint256);
+        return inco.getFee() + 2 * elistFee;
+    }
+
+    /// @dev After public tier is known, refresh encrypted pity.
     function _updatePity(address player, uint8 tier) private {
         if (tier == 5) {
             euint256 reset = e.asEuint256(0);

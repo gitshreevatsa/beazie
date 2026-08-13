@@ -67,6 +67,7 @@ export interface UnlockedPrize {
   playTxHash: string;
   unlockedAt: number;
   boxLabel?: string;
+  tokenId?: string;
 }
 
 /** Pick prize from on-chain cardId: (tier-1)*4 + slot + 1 */
@@ -98,6 +99,7 @@ export function buildUnlockedPrize(input: {
   tierName?: string;
   randomSeed: bigint | string | number;
   cardId?: bigint | number;
+  tokenId?: bigint | number;
   gameId: bigint | string | number;
   playTxHash: string;
   boxLabel?: string;
@@ -116,6 +118,10 @@ export function buildUnlockedPrize(input: {
     playTxHash: input.playTxHash,
     unlockedAt: Date.now(),
     boxLabel: input.boxLabel,
+    tokenId:
+      input.tokenId != null && Number(input.tokenId) > 0
+        ? String(input.tokenId)
+        : undefined,
   };
 }
 

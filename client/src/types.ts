@@ -1,7 +1,8 @@
-import type { Address } from "viem";
+import type { Address, WalletClient } from "viem";
 
 export interface GameContext {
   address: Address;
+  walletClient: WalletClient;
 }
 
 // Stages the two-phase ETH flow moves through (no token approval anymore).

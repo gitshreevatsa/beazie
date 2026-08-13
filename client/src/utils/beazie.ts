@@ -1,6 +1,6 @@
 import { Lightning } from "@inco/lightning-js/lite";
 import { pad, parseEventLogs, toHex } from "viem";
-import type { Hex } from "viem";
+import type { Hex, WalletClient } from "viem";
 import {
   readContract,
   writeContract,
@@ -22,6 +22,7 @@ export const BALANCE_REFRESH_EVENT = "beazie:balance-refresh";
 export type BeazieStage =
   | "betting"
   | "animating"
+  | "peeking"
   | "revealing"
   | "settling"
   | "done";
@@ -31,11 +32,14 @@ export interface PullResult {
   tier: number;
   tierName: string;
   cardId: bigint;
+  tokenId: bigint;
   randomSeed: bigint;
   playTxHash: Hex;
   settleTxHash: Hex;
   seedHandle: Hex;
   cardHandle: Hex;
+  /** Private card slot seen before public settle (0–3). */
+  peekedSlot: number | null;
 }
 
 type Zap = Awaited<ReturnType<typeof Lightning.baseSepoliaTestnet>>;
@@ -68,7 +72,11 @@ function formatAttestation(res: {
   };
 }
 
-/** Attest one or more revealed handles (Model A). */
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Attest public reveals (Model A — seed). */
 export async function revealAndFormatMany(
   handles: Hex[],
   outerRetries = 40,
@@ -88,7 +96,7 @@ export async function revealAndFormatMany(
       return results.map(formatAttestation);
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e));
-      await new Promise((r) => setTimeout(r, delayMs));
+      await sleep(delayMs);
     }
   }
   throw lastErr ?? new Error("attestedReveal failed after retries");
@@ -103,12 +111,65 @@ export async function revealAndFormat(
   return one;
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * Private decrypt (Model B) — player-signed EIP-712.
+ * Used for card settle + optional peek / pity meter.
+ */
+export async function decryptAndFormat(
+  walletClient: WalletClient,
+  handles: Hex[],
+  outerRetries = 40,
+  delayMs = 3000
+): Promise<{ attestation: SolAttestation; signatures: Hex[]; plaintext: bigint }[]> {
+  const zap = await getZap();
+  let lastErr: Error | undefined;
+  for (let i = 0; i < outerRetries; i++) {
+    try {
+      const results = await zap.attestedDecrypt(walletClient as never, handles, {
+        backoffConfig: {
+          maxRetries: 8,
+          baseDelayInMs: 2000,
+          backoffFactor: 1.2,
+        },
+      });
+      return results.map((res) => {
+        const formatted = formatAttestation(res);
+        const raw = res.plaintext.value;
+        const plaintext =
+          typeof raw === "boolean" ? (raw ? 1n : 0n) : (raw as bigint);
+        return { ...formatted, plaintext };
+      });
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      await sleep(delayMs);
+    }
+  }
+  throw lastErr ?? new Error("attestedDecrypt failed after retries");
+}
+
+/** Read pity counter privately (0 if unset / decrypt fails). */
+export async function peekPity(
+  walletClient: WalletClient,
+  player: Hex
+): Promise<number | null> {
+  const handle = (await readContract(wagmiConfig, {
+    address: beazieClawAddress,
+    abi: beazieClawABI,
+    functionName: "getPityHandle",
+    args: [player],
+  })) as Hex;
+  if (!handle || /^0x0+$/.test(handle)) return 0;
+  try {
+    const [dec] = await decryptAndFormat(walletClient, [handle], 8, 1500);
+    return Number(dec.plaintext);
+  } catch {
+    return null;
+  }
 }
 
 /**
- * playPull (e.rand + e.randBounded) → dual attestedReveal → dual-attestation settle.
+ * playPull (e.rand + shuffledRange) → private card peek → public seed reveal
+ * + private card decrypt → dual-attestation settle → ERC-721 mint.
  */
 export async function runPull(
   ctx: GameContext,
@@ -122,11 +183,15 @@ export async function runPull(
       cardHandle: Hex;
       playTxHash: Hex;
     }) => void;
+    onPeek?: (slot: number) => void;
   }
 ): Promise<PullResult> {
   const machineId = opts?.machineId;
   if (machineId == null || machineId < 0 || machineId > 4) {
     throw new Error("Pick a box first");
+  }
+  if (!ctx.walletClient) {
+    throw new Error("Wallet client required for private decrypt");
   }
   const animateMs = opts?.animateMs ?? 1400;
   const onStage = opts?.onStage;
@@ -144,7 +209,8 @@ export async function runPull(
       abi: beazieClawABI,
       functionName: "getFee",
     })) as bigint;
-    value = PULL_FEE_WEI + 2n * fee;
+    // Fallback: rand + 2× elist fee for 4×uint256 ≈ 9×fee
+    value = PULL_FEE_WEI + 9n * fee;
   }
 
   onStage?.("betting");
@@ -179,11 +245,34 @@ export async function runPull(
   onStage?.("animating");
   await sleep(animateMs);
 
+  // Private peek of the deck card (player-only) before public settle.
+  onStage?.("peeking");
+  let peekedSlot: number | null = null;
+  let cardReveal: { attestation: SolAttestation; signatures: Hex[] } | null =
+    null;
+  try {
+    const [cardDec] = await decryptAndFormat(ctx.walletClient, [cardHandle]);
+    peekedSlot = Number(cardDec.plaintext % 4n);
+    opts?.onPeek?.(peekedSlot);
+    cardReveal = {
+      attestation: cardDec.attestation,
+      signatures: cardDec.signatures,
+    };
+  } catch {
+    // Fall through — decrypt again after seed reveal
+  }
+
   onStage?.("revealing");
-  const [seedReveal, cardReveal] = await revealAndFormatMany([
-    seedHandle,
-    cardHandle,
-  ]);
+  const [seedReveal] = await revealAndFormatMany([seedHandle]);
+  if (!cardReveal) {
+    const [cardDec] = await decryptAndFormat(ctx.walletClient, [cardHandle]);
+    peekedSlot = Number(cardDec.plaintext % 4n);
+    opts?.onPeek?.(peekedSlot);
+    cardReveal = {
+      attestation: cardDec.attestation,
+      signatures: cardDec.signatures,
+    };
+  }
 
   onStage?.("settling");
   const settleHash = await writeContract(wagmiConfig, {
@@ -216,6 +305,7 @@ export async function runPull(
     tier: number;
     cardId: bigint;
     randomSeed: bigint;
+    tokenId: bigint;
   };
 
   onStage?.("done");
@@ -224,11 +314,13 @@ export async function runPull(
     tier: Number(args.tier),
     tierName: TIER_NAMES[Number(args.tier)] ?? "Unknown",
     cardId: args.cardId,
+    tokenId: args.tokenId,
     randomSeed: args.randomSeed,
     playTxHash: playHash,
     settleTxHash: settleHash,
     seedHandle,
     cardHandle,
+    peekedSlot,
   };
 }
 

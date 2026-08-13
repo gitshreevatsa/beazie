@@ -12,7 +12,10 @@ export function useGameContext() {
   const { data: walletClient } = useWalletClient();
 
   const ready = Boolean(isConnected && address && walletClient);
-  const ctx: GameContext | null = ready && address ? { address } : null;
+  const ctx: GameContext | null =
+    ready && address && walletClient
+      ? { address, walletClient }
+      : null;
 
   return { ctx, ready, address, isConnected };
 }

@@ -1,9 +1,9 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { parseEther, parseEventLogs, type PublicClient, type Hex } from "viem";
+import { parseEther, parseEventLogs, type PublicClient, type Hex, type WalletClient } from "viem";
 import * as fs from "fs";
 import * as path from "path";
-import { initZap, revealAndFormat, sleep, type Zap } from "./helpers";
+import { initZap, revealAndFormat, decryptAndFormat, sleep, type Zap } from "./helpers";
 
 const PULL_FEE = parseEther("0.0001");
 
@@ -12,13 +12,14 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
   let publicClient: PublicClient;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let claw: any;
-  let fee: bigint;
+  let wallet: WalletClient;
+  let playValue: bigint;
 
   before(async function () {
     publicClient = (await hre.viem.getPublicClient()) as unknown as PublicClient;
     const chainId = await publicClient.getChainId();
     zap = await initZap(chainId);
-    const [wallet] = await hre.viem.getWalletClients();
+    [wallet] = await hre.viem.getWalletClients();
 
     if (chainId === 31337) {
       claw = await hre.viem.deployContract("BeazieClaw");
@@ -34,15 +35,15 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
     }
 
     try {
-      fee = (await claw.read.getFee()) as bigint;
+      playValue = (await claw.read.playCost()) as bigint;
     } catch {
-      fee = 1000000000000n;
+      playValue = PULL_FEE + 9n * 1000000000000n;
     }
   });
 
   async function settleFrom(
     playHash: Hex
-  ): Promise<{ tier: number; cardId: bigint; gameId: bigint }> {
+  ): Promise<{ tier: number; cardId: bigint; gameId: bigint; tokenId: bigint }> {
     const receipt = await publicClient.waitForTransactionReceipt({ hash: playHash });
     const placed = parseEventLogs({
       abi: claw.abi,
@@ -58,7 +59,7 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
     };
 
     const seed = await revealAndFormat(zap, seedHandle);
-    const card = await revealAndFormat(zap, cardHandle);
+    const card = await decryptAndFormat(zap, wallet, cardHandle);
     const sTx = await claw.write.settle([
       gameId,
       seed.attestation,
@@ -86,24 +87,27 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
       tier: Number(args.tier),
       cardId: args.cardId as bigint,
       gameId,
+      tokenId: args.tokenId as bigint,
     };
   }
 
-  it("playPull → settle reveals tier + cardId", async function () {
-    const h = await claw.write.playPull([0], { value: PULL_FEE + 2n * fee });
-    const { tier, cardId, gameId } = await settleFrom(h);
+  it("playPull → settle reveals tier + cardId + mints NFT", async function () {
+    const h = await claw.write.playPull([0], { value: playValue });
+    const { tier, cardId, gameId, tokenId } = await settleFrom(h);
     expect(tier).to.be.gte(1);
     expect(tier).to.be.lte(5);
     expect(cardId).to.be.gte(1n);
+    expect(tokenId).to.be.gte(1n);
 
     const g = await claw.read.getGame([gameId]);
     expect(g[2]).to.equal(true);
     expect(Number(g[3])).to.equal(tier);
     expect(g[4]).to.equal(cardId);
+    expect(g[5]).to.equal(tokenId);
   });
 
   it("rejects double settle", async function () {
-    const h = await claw.write.playPull([0], { value: PULL_FEE + 2n * fee });
+    const h = await claw.write.playPull([0], { value: playValue });
     const receipt = await publicClient.waitForTransactionReceipt({ hash: h });
     const placed = parseEventLogs({
       abi: claw.abi,
@@ -117,7 +121,7 @@ describe("BeazieClaw (Inco Lightning, ETH)", function () {
       cardHandle: Hex;
     };
     const seed = await revealAndFormat(zap, seedHandle);
-    const card = await revealAndFormat(zap, cardHandle);
+    const card = await decryptAndFormat(zap, wallet, cardHandle);
     const args = [
       gameId,
       seed.attestation,

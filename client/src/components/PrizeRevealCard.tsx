@@ -7,6 +7,7 @@ import {
   TIER_ODDS,
   type UnlockedPrize,
 } from "@/utils/prizes";
+import { beazieClawAddress } from "@/utils/contract";
 
 export function PrizeRevealCard({
   prize,
@@ -64,17 +65,30 @@ export function PrizeRevealCard({
 
         <p className="relative mt-4 font-body text-xs text-butter/40">
           {prize.boxLabel ? `From Box ${prize.boxLabel} · ` : ""}
+          {prize.tokenId ? `NFT #${prize.tokenId} · ` : ""}
           Saved to your stash on this device
         </p>
 
-        <a
-          href={basescan}
-          target="_blank"
-          rel="noreferrer"
-          className="relative mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-butter/50 underline"
-        >
-          On-chain proof <ExternalLink className="h-3 w-3" />
-        </a>
+        <div className="relative mt-3 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={basescan}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-body text-xs font-semibold text-butter/50 underline"
+          >
+            Play tx <ExternalLink className="h-3 w-3" />
+          </a>
+          {prize.tokenId && (
+            <a
+              href={`https://sepolia.basescan.org/token/${beazieClawAddress}?a=${prize.tokenId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-body text-xs font-semibold text-butter/50 underline"
+            >
+              NFT on Basescan <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
 
         <button
           onClick={onAgain}
